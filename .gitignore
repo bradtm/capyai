@@ -1,0 +1,6 @@
+# Environments
+.env
+.env-prod
+
+# PyCharm
+.idea/
