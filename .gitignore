@@ -8,7 +8,10 @@
 
 .gitignore
 
-files
-transcripts
+files/
+transcripts/
+faiss-index/
+processed_files.json
+
 
 NEXT
