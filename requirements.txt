@@ -7,3 +7,4 @@ langchain-community
 langchain-pinecone
 pypdf
 docarray
+faiss-cpu
