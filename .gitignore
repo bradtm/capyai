@@ -1,8 +1,13 @@
 # Environments
 .env
 .env-prod
+.venv
 
 # PyCharm
 .idea/
 
 .gitignore
+
+files
+transcripts
+
