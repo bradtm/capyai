@@ -47,8 +47,8 @@ else:
         print(f"Error: FAISS index not found at '{FAISS_INDEX_PATH}'. Run rag-faiss.py first to create the index.")
         sys.exit(1)
 
-print(f"Using OpenAI model: {OPENAI_MODEL}")
-print(f"Using OpenAI embedding model: {OPENAI_EMBEDDING_MODEL}")
+print(f"*** Using OpenAI model: {OPENAI_MODEL}")
+print(f"*** Using OpenAI embedding model: {OPENAI_EMBEDDING_MODEL}")
 
 # Setup LangChain components
 model = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model=OPENAI_MODEL)
@@ -74,6 +74,16 @@ Answer based ONLY on the context above:"""
 
 prompt = ChatPromptTemplate.from_template(template)
 
+# Custom retriever function to get documents with scores
+def get_documents_with_scores(vectorstore, query, k=4):
+    """Get documents with similarity scores"""
+    if use_pinecone:
+        # For Pinecone, use similarity_search_with_score
+        return vectorstore.similarity_search_with_score(query, k=k)
+    else:
+        # For FAISS, use similarity_search_with_score
+        return vectorstore.similarity_search_with_score(query, k=k)
+
 # Query vector store
 try:
     if use_pinecone:
@@ -94,28 +104,39 @@ try:
         total_docs = vectorstore.index.ntotal
         print(f"*** Loaded FAISS index with {total_docs} documents ***")
     
-    # Create chain with source tracking (same for both vector stores)
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
-    
-    chain = RunnableParallel({
-        "context": retriever,
-        "question": RunnablePassthrough()
-    }).assign(
-        answer=prompt | model | parser
-    )
-    
     print(f"*** Searching for: {query} ***")
-    result = chain.invoke(query)
-    print(f"\nAnswer: {result['answer']}")
     
-    # Show source documents
-    if result.get('context'):
-        print(f"\nSources found: {len(result['context'])} documents")
-        for i, doc in enumerate(result['context'], 1):
+    # Get documents with similarity scores
+    docs_with_scores = get_documents_with_scores(vectorstore, query, k=4)
+    
+    # Extract just the documents for the chain
+    docs = [doc for doc, score in docs_with_scores]
+    
+    # Create the context string
+    context = "\n\n".join([doc.page_content for doc in docs])
+    
+    # Use the model directly since we already have the context
+    formatted_prompt = prompt.format_messages(context=context, question=query)
+    response = model.invoke(formatted_prompt)
+    answer = parser.invoke(response)
+    
+    print(f"\nAnswer: {answer}")
+    
+    # Show source documents with similarity scores
+    if docs_with_scores:
+        print(f"\nReferences: {len(docs_with_scores)} documents")
+        for i, (doc, score) in enumerate(docs_with_scores, 1):
             doc_id = doc.metadata.get('doc_id', 'unknown')
             source_file = doc.metadata.get('source_file', 'unknown')
             preview = doc.page_content[:100].replace('\n', ' ') + "..."
-            print(f"  {i}. {doc_id} (from {source_file}): {preview}")
+            
+            if use_pinecone:
+                # Pinecone scores are typically between 0-1 (higher is better)
+                print(f"  {i}. {doc_id} (from {source_file}) [similarity: {score:.4f}]: {preview}")
+            else:
+                # FAISS scores are distances (lower is better), convert to similarity
+                similarity = 1 / (1 + score)  # Convert distance to similarity-like score
+                print(f"  {i}. {doc_id} (from {source_file}) [similarity: {similarity:.4f}]: {preview}")
     
 except Exception as e:
     print(f"Error querying vector store: {e}")
