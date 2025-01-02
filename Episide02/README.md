@@ -1,12 +1,12 @@
 # RAG Media Query System
 
-A Python-based Retrieval-Augmented Generation (RAG) system that processes various media files (audio, text, PDFs) and enables natural language querying of their content using OpenAI's GPT models and embedding technology.
+A Python-based Retrieval-Augmented Generation (RAG) system that processes various media files (audio, video, text, PDFs) and enables natural language querying of their content using OpenAI's GPT models and embedding technology.
 
 ## What It Does
 
 This system:
-- **Processes multiple media formats**: MP3, WAV, TXT, and PDF documents
-- **Transcribes audio**: Uses OpenAI Whisper to convert audio files to text transcripts
+- **Processes multiple media formats**: Audio (MP3, WAV), Video (MP4, AVI, MOV, MKV, WEBM, FLV, M4V, 3GP), TXT, and PDF documents
+- **Transcribes audio and video**: Uses OpenAI Whisper to convert audio/video files to text transcripts
 - **Extracts text**: Extracts readable text from PDFs 
 - **Creates searchable knowledge base**: Splits content into chunks and generates embeddings for semantic search
 - **Answers questions**: Uses RAG to find relevant content and generate answers using GPT-3.5-turbo
@@ -192,6 +192,7 @@ If Pinecone credentials are not provided, only the in-memory response is shown.
 | Format | Extension | Processing Method |
 |--------|-----------|-------------------|
 | Audio | .mp3, .wav | OpenAI Whisper transcription |
+| Video | .mp4, .avi, .mov, .mkv, .webm, .flv, .m4v, .3gp | OpenAI Whisper transcription (audio extraction) |
 | Text | .txt | Direct reading |
 | PDF | .pdf | PyPDF text extraction |
 

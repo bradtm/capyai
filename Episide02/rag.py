@@ -137,7 +137,7 @@ for filename in os.listdir(MEDIA_DIR):
     if not os.path.isfile(media_path):
         continue
 
-    if not filename.lower().endswith(('.mp3', '.wav', '.txt', '.pdf')):
+    if not filename.lower().endswith(('.mp3', '.wav', '.txt', '.pdf', '.mp4', '.avi', '.mov', '.mkv', '.webm', '.flv', '.m4v', '.3gp')):
         continue
 
     # Prevent processing the same file twice in one run
@@ -171,7 +171,9 @@ for filename in os.listdir(MEDIA_DIR):
         with open(transcript_filename, "w") as file:
             file.write(tokens)
     else:
-        print(f"*** Transcribing audio: {media_path} ***")
+        # Handle audio and video files with Whisper transcription
+        file_type = "audio" if filename.lower().endswith(('.mp3', '.wav')) else "video"
+        print(f"*** Transcribing {file_type}: {media_path} ***")
         if whisper_model is None:
             print(f"*** Loading Whisper model: {WHISPER_MODEL} ***")
             whisper_model = whisper.load_model(WHISPER_MODEL)
