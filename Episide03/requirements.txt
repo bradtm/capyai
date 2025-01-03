@@ -7,4 +7,6 @@ langchain-community
 langchain-pinecone
 pypdf
 docarray
-faiss-cpu
+requests
+beautifulsoup4
+lxml
