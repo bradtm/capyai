@@ -1,13 +1,14 @@
 # RAG Media Query System
 
-A Python-based Retrieval-Augmented Generation (RAG) system that processes various media files (audio, video, text, PDFs) and enables natural language querying of their content using OpenAI's GPT models and embedding technology.
+A Python-based Retrieval-Augmented Generation (RAG) system that processes various media files (audio, video, text, PDFs) and web pages, enabling natural language querying of their content using OpenAI's GPT models and embedding technology.
 
 ## What It Does
 
 This system:
 - **Processes multiple media formats**: Audio (MP3, WAV), Video (MP4, AVI, MOV, MKV, WEBM, FLV, M4V, 3GP), TXT, and PDF documents
+- **Extracts web content**: Scrapes and extracts text content from web pages
 - **Transcribes audio and video**: Uses OpenAI Whisper to convert audio/video files to text transcripts
-- **Extracts text**: Extracts readable text from PDFs 
+- **Extracts text**: Extracts readable text from PDFs and web pages 
 - **Creates searchable knowledge base**: Splits content into chunks and generates embeddings for semantic search
 - **Answers questions**: Uses RAG to find relevant content and generate answers using GPT-3.5-turbo
 - **Supports two storage options**: 
@@ -44,6 +45,9 @@ This will install all the necessary dependencies:
 - `langchain` - LangChain framework and components
 - `pypdf` - PDF text extraction
 - `docarray` - Document array operations
+- `requests` - HTTP requests for web scraping
+- `beautifulsoup4` - HTML parsing and content extraction
+- `lxml` - XML/HTML parser for BeautifulSoup
 
 
 ## Environment Setup
@@ -78,17 +82,35 @@ PINECONE_INDEX=your_index_name
 ### Basic Syntax
 
 ```bash
-python3 rag.py <MediaDirectory> <query>
+# Process media files in a directory
+python3 rag.py <MediaDirectory>
+
+# Process a single web page  
+python3 rag.py <URL>
 ```
 
 ### Examples
+
+#### Processing a Web Page
+
+```bash
+# Process a web page and create/update vector index
+python3 rag.py https://en.wikipedia.org/wiki/Artificial_intelligence
+
+*** Processing URL: https://en.wikipedia.org/wiki/Artificial_intelligence ***
+*** Fetching web page: https://en.wikipedia.org/wiki/Artificial_intelligence ***
+*** Extracted 45234 characters from web page ***
+*** Split web page into 67 documents ***
+```
+
+#### Processing Media Files Directory
 
 ```bash
 # This is the first time the media files have been seen, so the PDF's and audio
 # files need to be processed and the results will be saved to TRANSCRIPT_DIR to
 # avoid reprocessing
 
-python3 rag.py ./files what is a rnn
+python3 rag.py ./files
 
 *** No Pinecone configuration - using in-memory vector store ***
 
@@ -174,10 +196,12 @@ A transformer is a model architecture that relies entirely on an attention mecha
 
 If you are using Pinecone and have already stored your embeddings by running the `rag.py` script, 
 but you wish to ask additional questions without having to re-create the embeddings, use the `ask.py` 
-script. The `rag.py` script is for extracting text from media files and creating the embeddings 
+script. The `rag.py` script is for extracting text from media files and web pages and creating the embeddings 
 and adding them to the vector store. There is no harm to reprocessing the same media files again
 with `rag.py`, but it will incur unnecessary costs for the embeddings. To avoid that,
 place new content in a different directory and provide that directory name to `rag.py`
+
+**Note**: Web page content is cached to the transcript directory just like media files, so re-running the same URL will use the cached content unless manually deleted.
 
 ## Output
 
@@ -189,12 +213,13 @@ If Pinecone credentials are not provided, only the in-memory response is shown.
 
 ## File Support
 
-| Format | Extension | Processing Method |
+| Format | Extension/Input | Processing Method |
 |--------|-----------|-------------------|
 | Audio | .mp3, .wav | OpenAI Whisper transcription |
 | Video | .mp4, .avi, .mov, .mkv, .webm, .flv, .m4v, .3gp | OpenAI Whisper transcription (audio extraction) |
 | Text | .txt | Direct reading |
 | PDF | .pdf | PyPDF text extraction |
+| Web Pages | HTTP/HTTPS URLs | BeautifulSoup web scraping and text extraction |
 
 ## Performance Notes
 
