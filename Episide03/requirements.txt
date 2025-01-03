@@ -1,0 +1,10 @@
+python-dotenv
+openai-whisper
+openai
+langchain
+langchain-openai
+langchain-community
+langchain-pinecone
+pypdf
+docarray
+faiss-cpu
