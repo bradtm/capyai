@@ -13,5 +13,6 @@ transcripts/
 faiss-index/
 processed_files.json
 
+__pycache__/
 
 NEXT
