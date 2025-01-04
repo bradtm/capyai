@@ -232,42 +232,44 @@ if IS_URL:
     
     print(f"\n*** Processing URL: {url} ***")
     
-    # Check if we already have this URL cached
+    # Check if we already have this URL cached and processed
     url_key = f"url_{url_filename}"
     if url_key in processed_files:
-        print("*** Using cached web page content ***")
-        loader = TextLoader(transcript_filename)
-    elif os.path.exists(transcript_filename):
-        print("*** Using existing transcript file ***") 
-        loader = TextLoader(transcript_filename)
+        print("*** Skipping URL (already processed and cached) ***")
+        # URL already processed and in vector store, skip completely
     else:
-        # Extract web content
-        web_content, page_title = extract_web_content(url)
-        if web_content:
-            with open(transcript_filename, "w", encoding='utf-8') as file:
-                file.write(web_content)
+        # URL needs processing
+        if os.path.exists(transcript_filename):
+            print("*** Using existing transcript file ***") 
             loader = TextLoader(transcript_filename, encoding='utf-8')
         else:
-            print("*** Failed to extract content from URL ***")
-            loader = None
-    
-    if loader:
-        raw_documents = loader.load()
-        split_docs = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=400).split_documents(raw_documents)
+            # Extract web content
+            web_content, page_title = extract_web_content(url)
+            if web_content:
+                with open(transcript_filename, "w", encoding='utf-8') as file:
+                    file.write(web_content)
+                loader = TextLoader(transcript_filename, encoding='utf-8')
+            else:
+                print("*** Failed to extract content from URL ***")
+                loader = None
         
-        # Assign document IDs
-        for idx, doc in enumerate(split_docs):
-            doc.metadata["doc_id"] = f"{url_filename}_{idx}"
-            doc.metadata["source_file"] = url
-            doc.metadata["source_type"] = "url"
-        
-        print(f"*** Split web page into {len(split_docs)} documents ***")
-        all_documents.extend(split_docs)
-        
-        # Mark URL as processed
-        processed_files[url_key] = {"url": url, "processed_time": time.time()}
-        processed_in_this_run.add(url_key)
-        new_files_processed += 1
+        if loader:
+            raw_documents = loader.load()
+            split_docs = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=400).split_documents(raw_documents)
+            
+            # Assign document IDs
+            for idx, doc in enumerate(split_docs):
+                doc.metadata["doc_id"] = f"{url_filename}_{idx}"
+                doc.metadata["source_file"] = url
+                doc.metadata["source_type"] = "url"
+            
+            print(f"*** Split web page into {len(split_docs)} documents ***")
+            all_documents.extend(split_docs)
+            
+            # Mark URL as processed
+            processed_files[url_key] = {"url": url, "processed_time": time.time()}
+            processed_in_this_run.add(url_key)
+            new_files_processed += 1
 
 else:
     # Process media files in directory
