@@ -76,11 +76,8 @@ if not OPENAI_API_KEY:
 
 # Create transcript directory if it doesn't exist
 if not os.path.exists(TRANSCRIPT_DIR):
-    print(f"*** Creating transcript directory: {TRANSCRIPT_DIR} ***")
     os.makedirs(TRANSCRIPT_DIR, exist_ok=True)
 
-print(f"*** Using Whisper model: {WHISPER_MODEL} ***")
-print(f"*** Using OpenAI embedding model: {OPENAI_EMBEDDING_MODEL} ***")
 
 def load_processed_files():
     """Load the list of already processed files from disk"""
@@ -217,7 +214,6 @@ vectorstore1 = None
 if not use_pinecone:
     # FAISS setup
     if os.path.exists(FAISS_INDEX_PATH):
-        print(f"*** Loading existing FAISS index from: {FAISS_INDEX_PATH} ***")
         vectorstore1 = FAISS.load_local(FAISS_INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
         print(f"*** Loaded existing index with {vectorstore1.index.ntotal} documents ***")
     else:
@@ -235,7 +231,6 @@ if IS_URL:
     transcript_filename = os.path.join(TRANSCRIPT_DIR, url_filename + ".txt")
     
     print(f"\n*** Processing URL: {url} ***")
-    print(f"*** Transcript file: {transcript_filename} ***")
     
     # Check if we already have this URL cached
     url_key = f"url_{url_filename}"
@@ -298,7 +293,6 @@ else:
         transcript_filename = os.path.join(TRANSCRIPT_DIR, base_name + ".txt")
 
         print(f"\n*** Processing file: {filename} ***")
-        print(f"*** Transcript file: {transcript_filename} ***")
 
         if os.path.exists(transcript_filename):
             print("*** Skipping extraction/transcription; text file already exists ***")
@@ -319,7 +313,6 @@ else:
             file_type = "audio" if filename.lower().endswith(('.mp3', '.wav')) else "video"
             print(f"*** Transcribing {file_type}: {media_path} ***")
             if whisper_model is None:
-                print(f"*** Loading Whisper model: {WHISPER_MODEL} ***")
                 whisper_model = whisper.load_model(WHISPER_MODEL)
             start = time.time()
             transcription = whisper_model.transcribe(media_path, fp16=False)
@@ -405,7 +398,6 @@ if new_files_processed > 0 and len(all_documents) > 0:
 
             upload_time = time.time() - start_upload
             print(f"*** Uploaded {len(all_documents)} documents in {upload_time:.2f} seconds ***")
-            print(f"*** Successfully processed {new_files_processed} files ***")
 
         except Exception as e:
             print(f"Error with Pinecone operation: {e}")
@@ -430,7 +422,6 @@ if new_files_processed > 0 and len(all_documents) > 0:
         
         total_docs = vectorstore1.index.ntotal
         print(f"*** FAISS index now contains {total_docs} total documents ***")
-        print(f"*** Successfully processed {new_files_processed} files ***")
     
     # Save processed files metadata
     save_processed_files(processed_files)
@@ -452,5 +443,3 @@ else:
                 print(f"\n*** No new files to process. FAISS index contains {total_docs} documents ***")
             else:
                 print(f"\n*** No files found to process in {MEDIA_DIR} ***")
-
-print("*** Processing complete ***")
