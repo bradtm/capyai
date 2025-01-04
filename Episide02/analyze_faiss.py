@@ -2,11 +2,7 @@
 
 import os
 import sys
-import json
-import pickle
-from collections import Counter, defaultdict
-from datetime import datetime
-import numpy as np
+from collections import Counter
 from dotenv import load_dotenv
 from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
@@ -72,7 +68,6 @@ def analyze_faiss_index(faiss_path):
         if docstore_dict:
             # Analyze metadata
             source_files = Counter()
-            doc_ids = []
             
             print(f"Document store contains {len(docstore_dict)} documents")
             
@@ -80,8 +75,6 @@ def analyze_faiss_index(faiss_path):
                 if hasattr(doc, 'metadata'):
                     if 'source_file' in doc.metadata:
                         source_files[doc.metadata['source_file']] += 1
-                    if 'doc_id' in doc.metadata:
-                        doc_ids.append(doc.metadata['doc_id'])
             
             # Source file statistics
             print(f"\nSOURCE FILES ({len(source_files)} unique files):")
@@ -90,54 +83,6 @@ def analyze_faiss_index(faiss_path):
         else:
             print("️   Document store is empty or inaccessible")
 
-
-    # 7. Health Check
-    print(f"\nHEALTH CHECK")
-    print("-" * len('HEALTH CHECK'))
-
-    health_score = 0
-    max_score = 4
-    
-    # Check 1: Required files exist
-    if all(f in files_in_dir for f in required_files):
-        print("✅ All required FAISS files present")
-        health_score += 1
-    else:
-        print("❌ Missing required FAISS files")
-    
-    # Check 2: Index loads successfully
-    if 'vectorstore' in locals():
-        print("✅ Index loads without errors")
-        health_score += 1
-    else:
-        print("❌ Index failed to load")
-    
-    # Check 3: Contains documents
-    if total_docs > 0:
-        print(f"✅ Index contains documents ({total_docs:,})")
-        health_score += 1
-    else:
-        print("❌ Index is empty")
-
-    # Check 4: Recent activity
-    if required_files and all(f in files_in_dir for f in required_files):
-        newest_file = max([os.path.join(faiss_path, f) for f in required_files], 
-                         key=os.path.getmtime)
-        days_old = (datetime.now() - datetime.fromtimestamp(os.path.getmtime(newest_file))).days
-        if days_old < 30:
-            print(f"✅ Index recently updated ({days_old} days ago)")
-            health_score += 1
-        else:
-            print(f"⚠️  Index last updated {days_old} days ago")
-    
-    print(f"\nOverall Health Score: {health_score}/{max_score}")
-    
-    if health_score >= 4:
-        print("🟢 Index appears healthy and ready for use")
-    elif health_score >= 2:
-        print("🟡 Index has some issues but may still be usable")
-    else:
-        print("🔴 Index has significant issues and may need rebuilding")
 
 def test_search(faiss_path, query="test search"):
     """Test search functionality on the FAISS index"""
