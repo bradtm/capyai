@@ -257,10 +257,11 @@ if IS_URL:
             raw_documents = loader.load()
             split_docs = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=400).split_documents(raw_documents)
             
-            # Assign document IDs
+            # Assign document IDs and fix metadata
             for idx, doc in enumerate(split_docs):
                 doc.metadata["doc_id"] = f"{url_filename}_{idx}"
-                doc.metadata["source_file"] = url
+                doc.metadata["source"] = url  # Original source (URL)
+                doc.metadata["transcript_file"] = doc.metadata.get("source", transcript_filename)  # Transcript file path
                 doc.metadata["source_type"] = "url"
             
             print(f"*** Split web page into {len(split_docs)} documents ***")
@@ -328,10 +329,11 @@ else:
         raw_documents = loader.load()
         split_docs = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=400).split_documents(raw_documents)
 
-        # Assign document IDs
+        # Assign document IDs and fix metadata
         for idx, doc in enumerate(split_docs):
             doc.metadata["doc_id"] = f"{base_name}_{idx}"
-            doc.metadata["source_file"] = filename
+            doc.metadata["source"] = filename  # Original source (filename)
+            doc.metadata["transcript_file"] = doc.metadata.get("source", transcript_filename)  # Transcript file path
             doc.metadata["source_type"] = "file"
 
         print(f"*** Split transcript into {len(split_docs)} documents ***")
@@ -406,16 +408,36 @@ if new_files_processed > 0 and len(all_documents) > 0:
             sys.exit(1)
     
     else:
-        # FAISS processing
+        # FAISS processing - use same approach as Pinecone for consistent IDs
+        # Convert documents into (id, content, metadata) tuples
+        docs_with_ids = [
+            {
+                "id": doc.metadata["doc_id"],
+                "page_content": doc.page_content,
+                "metadata": doc.metadata
+            }
+            for doc in all_documents
+        ]
+        
         if vectorstore1 is None:
             # Create new FAISS index
             print(f"*** Creating new FAISS index ***")
-            vectorstore1 = FAISS.from_documents(all_documents, embedding=embeddings)
+            vectorstore1 = FAISS.from_texts(
+                texts=[doc["page_content"] for doc in docs_with_ids],
+                embedding=embeddings,
+                metadatas=[doc["metadata"] for doc in docs_with_ids],
+                ids=[doc["id"] for doc in docs_with_ids]
+            )
         else:
             # Add new documents to existing index
             print(f"*** Adding new documents to existing FAISS index ***")
             print(f"*** Index had {vectorstore1.index.ntotal} documents before merge ***")
-            new_vectorstore = FAISS.from_documents(all_documents, embedding=embeddings)
+            new_vectorstore = FAISS.from_texts(
+                texts=[doc["page_content"] for doc in docs_with_ids],
+                embedding=embeddings,
+                metadatas=[doc["metadata"] for doc in docs_with_ids],
+                ids=[doc["id"] for doc in docs_with_ids]
+            )
             vectorstore1.merge_from(new_vectorstore)
         
         # Save updated index to disk
