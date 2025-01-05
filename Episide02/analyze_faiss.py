@@ -73,13 +73,42 @@ def analyze_faiss_index(faiss_path):
             
             for doc in docstore_dict.values():
                 if hasattr(doc, 'metadata'):
-                    if 'source_file' in doc.metadata:
-                        source_files[doc.metadata['source_file']] += 1
+                    if 'source' in doc.metadata:
+                        source_files[doc.metadata['source']] += 1
             
             # Source file statistics
             print(f"\nSOURCE FILES ({len(source_files)} unique files):")
             for file, count in source_files.most_common():
                 print(f"   • {file}: {count} chunks")
+            
+            # Show first 3 entries
+            print(f"\nFIRST 3 ENTRIES:")
+            print("-" * len('FIRST 3 ENTRIES'))
+            
+            doc_items = list(docstore_dict.items())[:3]
+            for i, (doc_key, doc) in enumerate(doc_items, 1):
+                print(f"\nEntry {i}:")
+                print(f"   Key: {doc_key}")
+                
+                if hasattr(doc, 'metadata'):
+                    print(f"   Metadata:")
+                    # Show all metadata fields, sorted for consistency
+                    for key, value in sorted(doc.metadata.items()):
+                        print(f"      {key}: {value}")
+                else:
+                    print(f"   Metadata: None")
+                
+                if hasattr(doc, 'page_content'):
+                    content = doc.page_content.strip()
+                    if len(content) > 100:
+                        truncated_content = content[:100] + "..."
+                    else:
+                        truncated_content = content
+                    # Replace newlines with spaces for cleaner display
+                    truncated_content = truncated_content.replace('\n', ' ').replace('\r', ' ')
+                    print(f"   Content: {truncated_content}")
+                else:
+                    print(f"   Content: None")
         else:
             print("️   Document store is empty or inaccessible")
 
@@ -113,8 +142,8 @@ def test_search(faiss_path, query="test search"):
         
         for i, (doc, score) in enumerate(results_with_scores, 1):
             print(f"\nResult {i} (score: {score:.4f})")
-            if hasattr(doc, 'metadata') and 'source_file' in doc.metadata:
-                print(f"   Source: {doc.metadata['source_file']}")
+            if hasattr(doc, 'metadata') and 'source' in doc.metadata:
+                print(f"   Source: {doc.metadata['source']}")
         
         return True
         
