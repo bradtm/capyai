@@ -127,16 +127,16 @@ try:
         print(f"\nReferences: {len(docs_with_scores)} documents")
         for i, (doc, score) in enumerate(docs_with_scores, 1):
             doc_id = doc.metadata.get('doc_id', 'unknown')
-            source_file = doc.metadata.get('source_file', 'unknown')
+            source = doc.metadata.get('source', 'unknown')
             preview = doc.page_content[:100].replace('\n', ' ') + "..."
             
             if use_pinecone:
                 # Pinecone scores are typically between 0-1 (higher is better)
-                print(f"  {i}. {doc_id} (from {source_file}) [similarity: {score:.4f}]: {preview}")
+                print(f"  {i}. {doc_id} (from {source}) [similarity: {score:.4f}]: {preview}")
             else:
                 # FAISS scores are distances (lower is better), convert to similarity
                 similarity = 1 / (1 + score)  # Convert distance to similarity-like score
-                print(f"  {i}. {doc_id} (from {source_file}) [similarity: {similarity:.4f}]: {preview}")
+                print(f"  {i}. {doc_id} (from {source}) [similarity: {similarity:.4f}]: {preview}")
     
 except Exception as e:
     print(f"Error querying vector store: {e}")
