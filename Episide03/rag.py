@@ -259,9 +259,12 @@ if IS_URL:
             
             # Assign document IDs and fix metadata
             for idx, doc in enumerate(split_docs):
+                # Store original source (transcript file path) before overwriting
+                original_source = doc.metadata.get("source", transcript_filename)
+                
                 doc.metadata["doc_id"] = f"{url_filename}_{idx}"
                 doc.metadata["source"] = url  # Original source (URL)
-                doc.metadata["transcript_file"] = doc.metadata.get("source", transcript_filename)  # Transcript file path
+                doc.metadata["transcript_file"] = original_source  # Transcript file path
                 doc.metadata["source_type"] = "url"
             
             print(f"*** Split web page into {len(split_docs)} documents ***")
@@ -331,9 +334,12 @@ else:
 
         # Assign document IDs and fix metadata
         for idx, doc in enumerate(split_docs):
+            # Store original source (transcript file path) before overwriting
+            original_source = doc.metadata.get("source", transcript_filename)
+            
             doc.metadata["doc_id"] = f"{base_name}_{idx}"
             doc.metadata["source"] = filename  # Original source (filename)
-            doc.metadata["transcript_file"] = doc.metadata.get("source", transcript_filename)  # Transcript file path
+            doc.metadata["transcript_file"] = original_source  # Transcript file path
             doc.metadata["source_type"] = "file"
 
         print(f"*** Split transcript into {len(split_docs)} documents ***")
