@@ -7,6 +7,9 @@ from dotenv import load_dotenv
 from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 
+# Load environment variables
+load_dotenv()
+
 def analyze_faiss_index(faiss_path):
     """Analyze a FAISS index directory and provide comprehensive statistics"""
     
@@ -37,7 +40,6 @@ def analyze_faiss_index(faiss_path):
     # Try to load the index
     try:
         print(f"\nLoading FAISS index...")
-        load_dotenv()
         
         embedding_model = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
         # print(f"   Using embedding model: {embedding_model}")
@@ -120,7 +122,6 @@ def test_search(faiss_path, query="test search"):
     print("-" * len('SEARCH TEST'))
     
     try:
-        load_dotenv()
         embedding_model = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
         embeddings = OpenAIEmbeddings(model=embedding_model)
         vectorstore = FAISS.load_local(faiss_path, embeddings, allow_dangerous_deserialization=True)
@@ -152,14 +153,38 @@ def test_search(faiss_path, query="test search"):
         return False
 
 def main():
-    if len(sys.argv) < 2:
-        print(f"Usage: {sys.argv[0]} <faiss_index_path> [search_query]")
-        print(f"Example: {sys.argv[0]} ./faiss_index")
-        print(f"Example: {sys.argv[0]} ./faiss_index 'machine learning'")
-        sys.exit(1)
+    # Get FAISS index path from environment or command line
+    default_faiss_path = os.getenv("FAISS_INDEX_PATH", "faiss_index")
     
-    faiss_path = sys.argv[1]
-    search_query = sys.argv[2] if len(sys.argv) > 2 else None
+    if len(sys.argv) == 1:
+        # No arguments - use environment default
+        faiss_path = default_faiss_path
+        search_query = None
+        print(f"Using FAISS index path from environment: {faiss_path}")
+    elif len(sys.argv) == 2:
+        # Check if arg is a search query (not a path)
+        arg = sys.argv[1]
+        if os.path.exists(arg) or '/' in arg or '\\' in arg:
+            # Looks like a path
+            faiss_path = arg
+            search_query = None
+        else:
+            # Assume it's a search query, use default path
+            faiss_path = default_faiss_path
+            search_query = arg
+            print(f"Using FAISS index path from environment: {faiss_path}")
+    elif len(sys.argv) == 3:
+        # Traditional usage: path and query
+        faiss_path = sys.argv[1]
+        search_query = sys.argv[2]
+    else:
+        print(f"Usage: {sys.argv[0]} [faiss_index_path] [search_query]")
+        print(f"Examples:")
+        print(f"  {sys.argv[0]}                              # Use FAISS_INDEX_PATH from .env")
+        print(f"  {sys.argv[0]} 'search query'               # Use FAISS_INDEX_PATH from .env with query")
+        print(f"  {sys.argv[0]} ./faiss_index                # Use specific path")
+        print(f"  {sys.argv[0]} ./faiss_index 'search query' # Use specific path with query")
+        sys.exit(1)
     
     # Main analysis
     analyze_faiss_index(faiss_path)
