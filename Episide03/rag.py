@@ -136,39 +136,101 @@ def extract_web_content(url):
         # Parse HTML content
         soup = BeautifulSoup(response.content, 'lxml')
         
-        # Remove script and style elements
-        for script in soup(["script", "style"]):
-            script.decompose()
+        # Remove unwanted elements more aggressively
+        unwanted_tags = [
+            'script', 'style', 'nav', 'header', 'footer', 'aside', 
+            'noscript', 'iframe', 'form', 'button', 'input',
+            # Wikipedia-specific noise
+            '.navbox', '.infobox', '.mbox', '.sidebar', '.toc', 
+            '.navigation-not-searchable', '.printfooter', '.catlinks',
+            '#toc', '#siteSub', '#contentSub', '#jump-to-nav', '#mw-navigation',
+            '.reference', '.reflist', '.citation', '.hatnote', '.dablink',
+            # Common site elements
+            '.advertisement', '.ad', '.ads', '.social-share', '.share-buttons',
+            '.comments', '.related-articles', '.author-bio', '.tags'
+        ]
+        
+        # Remove by tag name (first 6 items)
+        for tag_name in unwanted_tags[:6]:
+            for element in soup(tag_name):
+                element.decompose()
+        
+        # Remove by CSS selector (remaining items)
+        for selector in unwanted_tags[6:]:
+            for element in soup.select(selector):
+                element.decompose()
         
         # Get page title
         title = soup.find('title')
         title_text = title.get_text().strip() if title else "Untitled"
         
-        # Extract main content - try common content containers first
+        # Improved content selectors with site-specific handling
         content_selectors = [
-            'article', 'main', '[role="main"]', '.content', '.post-content', 
-            '.entry-content', '.article-content', '#content', '.main-content'
+            # Wikipedia specific
+            '#mw-content-text .mw-parser-output',
+            '#bodyContent #mw-content-text',
+            # Generic article content
+            'article', '[role="main"]', 'main',
+            # Blog/CMS patterns
+            '.post-content', '.entry-content', '.article-content',
+            '.content', '#content', '.main-content',
+            # News sites
+            '.story-body', '.article-body', '.post-body'
         ]
         
         content_text = ""
+        selected_selector = None
         for selector in content_selectors:
             content_elem = soup.select_one(selector)
             if content_elem:
                 content_text = content_elem.get_text()
+                selected_selector = selector
                 break
         
-        # If no main content found, extract from body
+        # If no main content found, try more aggressive extraction
         if not content_text:
-            body = soup.find('body')
-            if body:
-                content_text = body.get_text()
+            print("*** Warning: Using fallback content extraction ***")
+            # Try to find the longest text block
+            text_blocks = []
+            for elem in soup.find_all(['p', 'div', 'article', 'section']):
+                text = elem.get_text().strip()
+                if len(text) > 100:  # Only consider substantial text blocks
+                    text_blocks.append(text)
+            
+            if text_blocks:
+                # Take the longest text blocks (likely main content)
+                text_blocks.sort(key=len, reverse=True)
+                content_text = '\n\n'.join(text_blocks[:5])  # Top 5 longest blocks
             else:
-                content_text = soup.get_text()
+                body = soup.find('body')
+                if body:
+                    content_text = body.get_text()
+                else:
+                    content_text = soup.get_text()
         
-        # Clean up the text
-        lines = (line.strip() for line in content_text.splitlines())
-        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-        content_text = '\n'.join(chunk for chunk in chunks if chunk)
+        print(f"*** Used selector: {selected_selector or 'fallback'} ***")
+        
+        # Enhanced text cleaning
+        lines = []
+        for line in content_text.splitlines():
+            line = line.strip()
+            # Skip very short lines (likely navigation/UI elements)
+            if len(line) < 3:
+                continue
+            # Skip lines that are mostly punctuation or numbers
+            if len([c for c in line if c.isalpha()]) < len(line) * 0.5:
+                continue
+            # Skip common navigation text
+            nav_keywords = ['edit', 'view', 'history', 'talk', 'skip to', 'jump to', 'menu', 'search']
+            if any(keyword in line.lower() for keyword in nav_keywords) and len(line) < 50:
+                continue
+            lines.append(line)
+        
+        # Join lines and clean up excessive whitespace
+        content_text = '\n'.join(lines)
+        # Remove excessive blank lines
+        content_text = re.sub(r'\n\s*\n\s*\n', '\n\n', content_text)
+        content_text = content_text.strip()
         
         # Combine title and content
         full_text = f"{title_text}\n\n{content_text}"
