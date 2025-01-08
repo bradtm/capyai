@@ -2,6 +2,7 @@
 
 import os
 import sys
+import argparse
 from dotenv import load_dotenv
 from langchain_openai.chat_models import ChatOpenAI
 from langchain_core.output_parsers import StrOutputParser
@@ -11,23 +12,47 @@ from langchain_community.vectorstores import FAISS
 from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_core.runnables import RunnablePassthrough, RunnableParallel
 
-# Validate arguments
-if len(sys.argv) < 2:
-    print(f"Syntax: {sys.argv[0]} [query...]")
-    sys.exit(1)
+# Optional Chroma imports
+try:
+    from langchain_chroma import Chroma
+    import chromadb
+    CHROMA_AVAILABLE = True
+except ImportError:
+    CHROMA_AVAILABLE = False
 
-query = " ".join(sys.argv[1:])
+# Parse command line arguments
+parser = argparse.ArgumentParser(
+    description="Query RAG system with FAISS, Pinecone, or Chroma vector stores",
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+    epilog="""
+Examples:
+  # Query FAISS index (default)
+  %(prog)s "What is artificial intelligence?"
+  
+  # Query Pinecone index
+  %(prog)s --store pinecone "What is machine learning?"
+  
+  # Query Chroma index
+  %(prog)s --store chroma --chroma-path ./my_chroma "Explain neural networks"
+    """
+)
+parser.add_argument("query", nargs="+", help="Query text to search for")
+parser.add_argument("--store", choices=["faiss", "pinecone", "chroma"], default="faiss",
+                   help="Vector store to use (default: faiss)")
+parser.add_argument("--faiss-path", help="FAISS index directory path (default: FAISS_INDEX_PATH env or 'faiss_index')")
+parser.add_argument("--pinecone-key", help="Pinecone API key")
+parser.add_argument("--pinecone-index", help="Pinecone index name")
+parser.add_argument("--chroma-path", help="Chroma database path (default: CHROMA_PATH env or './chroma_db')")
+parser.add_argument("--chroma-index", help="Chroma collection name (default: CHROMA_INDEX env or 'default_index')")
+parser.add_argument("-k", "--top-k", type=int, default=4, help="Number of similar documents to retrieve (default: 4)")
+parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
+
+args = parser.parse_args()
+query = " ".join(args.query)
 
 # Load environment variables
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-PINECONE_INDEX = os.getenv("PINECONE_INDEX")
-
-# FAISS configuration (same as rag-faiss.py)
-FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", "faiss_index")
-
-# Model configuration (same as rag-faiss.py)
 OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
 
@@ -35,24 +60,41 @@ if not OPENAI_API_KEY:
     print("Error: OPENAI_API_KEY must be set in the environment.")
     sys.exit(1)
 
-# Determine which vector store to use (same logic as rag-faiss.py)
-use_pinecone = bool(PINECONE_API_KEY and PINECONE_INDEX)
-
-if use_pinecone:
-    print(f"*** Using Pinecone vector store: {PINECONE_INDEX} ***")
-else:
-    print(f"*** Using local FAISS vector store: {FAISS_INDEX_PATH} ***")
-    # Check if FAISS index exists
+# Configure vector store based on selection
+if args.store == "faiss":
+    FAISS_INDEX_PATH = args.faiss_path or os.getenv("FAISS_INDEX_PATH", "faiss_index")
     if not os.path.exists(FAISS_INDEX_PATH):
-        print(f"Error: FAISS index not found at '{FAISS_INDEX_PATH}'. Run rag-faiss.py first to create the index.")
+        print(f"Error: FAISS index not found at '{FAISS_INDEX_PATH}'. Run rag-improved.py first to create the index.")
         sys.exit(1)
+    if args.verbose:
+        print(f"*** Using local FAISS vector store: {FAISS_INDEX_PATH} ***")
+elif args.store == "pinecone":
+    PINECONE_API_KEY = args.pinecone_key or os.getenv("PINECONE_API_KEY")
+    PINECONE_INDEX = args.pinecone_index or os.getenv("PINECONE_INDEX")
+    if not PINECONE_API_KEY or not PINECONE_INDEX:
+        print("Error: PINECONE_API_KEY and PINECONE_INDEX must be set for Pinecone store")
+        sys.exit(1)
+    if args.verbose:
+        print(f"*** Using Pinecone vector store: {PINECONE_INDEX} ***")
+elif args.store == "chroma":
+    if not CHROMA_AVAILABLE:
+        print("Error: Chroma dependencies not installed. Run: pip install langchain-chroma chromadb")
+        sys.exit(1)
+    CHROMA_PATH = args.chroma_path or os.getenv("CHROMA_PATH", "./chroma_db")
+    CHROMA_INDEX = args.chroma_index or os.getenv("CHROMA_INDEX", "default_index")
+    if not os.path.exists(CHROMA_PATH):
+        print(f"Error: Chroma database not found at '{CHROMA_PATH}'. Run rag-improved.py first to create the database.")
+        sys.exit(1)
+    if args.verbose:
+        print(f"*** Using Chroma vector store: {CHROMA_PATH}/{CHROMA_INDEX} ***")
 
-print(f"*** Using OpenAI model: {OPENAI_MODEL}")
-print(f"*** Using OpenAI embedding model: {OPENAI_EMBEDDING_MODEL}")
+if args.verbose:
+    print(f"*** Using OpenAI model: {OPENAI_MODEL}")
+    print(f"*** Using OpenAI embedding model: {OPENAI_EMBEDDING_MODEL}")
 
 # Setup LangChain components
 model = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model=OPENAI_MODEL)
-parser = StrOutputParser()
+parser_output = StrOutputParser()
 embeddings = OpenAIEmbeddings(model=OPENAI_EMBEDDING_MODEL)
 
 # Setup LangChain components
@@ -75,25 +117,15 @@ Answer based ONLY on the context above:"""
 prompt = ChatPromptTemplate.from_template(template)
 
 # Custom retriever function to get documents with scores
-def get_documents_with_scores(vectorstore, query, k=4):
+def get_documents_with_scores(vectorstore, query, store_type, k=4):
     """Get documents with similarity scores"""
-    if use_pinecone:
-        # For Pinecone, use similarity_search_with_score
-        return vectorstore.similarity_search_with_score(query, k=k)
-    else:
-        # For FAISS, use similarity_search_with_score
-        return vectorstore.similarity_search_with_score(query, k=k)
+    return vectorstore.similarity_search_with_score(query, k=k)
 
 # Query vector store
 try:
-    if use_pinecone:
-        print(f"*** Querying Pinecone index: {PINECONE_INDEX} ***")
-        
-        vectorstore = PineconeVectorStore.from_existing_index(
-            PINECONE_INDEX, embeddings
-        )
-    else:
-        print(f"*** Loading FAISS index from: {FAISS_INDEX_PATH} ***")
+    if args.store == "faiss":
+        if args.verbose:
+            print(f"*** Loading FAISS index from: {FAISS_INDEX_PATH} ***")
         
         vectorstore = FAISS.load_local(
             FAISS_INDEX_PATH, 
@@ -101,13 +133,40 @@ try:
             allow_dangerous_deserialization=True
         )
         
-        total_docs = vectorstore.index.ntotal
-        print(f"*** Loaded FAISS index with {total_docs} documents ***")
+        if args.verbose:
+            total_docs = vectorstore.index.ntotal
+            print(f"*** Loaded FAISS index with {total_docs} documents ***")
     
-    print(f"*** Searching for: {query} ***")
+    elif args.store == "pinecone":
+        if args.verbose:
+            print(f"*** Connecting to Pinecone index: {PINECONE_INDEX} ***")
+        
+        vectorstore = PineconeVectorStore.from_existing_index(
+            PINECONE_INDEX, embeddings
+        )
+    
+    elif args.store == "chroma":
+        if args.verbose:
+            print(f"*** Loading Chroma database from: {CHROMA_PATH} ***")
+        
+        client = chromadb.PersistentClient(path=CHROMA_PATH)
+        vectorstore = Chroma(
+            client=client,
+            collection_name=CHROMA_INDEX,
+            embedding_function=embeddings,
+            persist_directory=CHROMA_PATH
+        )
+        
+        if args.verbose:
+            collection = client.get_collection(CHROMA_INDEX)
+            total_docs = collection.count()
+            print(f"*** Loaded Chroma collection with {total_docs} documents ***")
+    
+    if args.verbose:
+        print(f"*** Searching for: {query} ***")
     
     # Get documents with similarity scores
-    docs_with_scores = get_documents_with_scores(vectorstore, query, k=4)
+    docs_with_scores = get_documents_with_scores(vectorstore, query, args.store, k=args.top_k)
     
     # Extract just the documents for the chain
     docs = [doc for doc, score in docs_with_scores]
@@ -118,7 +177,7 @@ try:
     # Use the model directly since we already have the context
     formatted_prompt = prompt.format_messages(context=context, question=query)
     response = model.invoke(formatted_prompt)
-    answer = parser.invoke(response)
+    answer = parser_output.invoke(response)
     
     print(f"\nAnswer: {answer}")
     
@@ -130,11 +189,15 @@ try:
             source = doc.metadata.get('source', 'unknown')
             preview = doc.page_content[:100].replace('\n', ' ') + "..."
             
-            if use_pinecone:
+            if args.store == "pinecone":
                 # Pinecone scores are typically between 0-1 (higher is better)
                 print(f"  {i}. {doc_id} (from {source}) [similarity: {score:.4f}]: {preview}")
-            else:
+            elif args.store == "faiss":
                 # FAISS scores are distances (lower is better), convert to similarity
+                similarity = 1 / (1 + score)  # Convert distance to similarity-like score
+                print(f"  {i}. {doc_id} (from {source}) [similarity: {similarity:.4f}]: {preview}")
+            elif args.store == "chroma":
+                # Chroma scores are distances (lower is better), convert to similarity
                 similarity = 1 / (1 + score)  # Convert distance to similarity-like score
                 print(f"  {i}. {doc_id} (from {source}) [similarity: {similarity:.4f}]: {preview}")
     
