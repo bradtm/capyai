@@ -529,6 +529,9 @@ class UniversalRAGProcessor:
         os.makedirs(transcript_dir, exist_ok=True)
         transcript_filename = os.path.join(transcript_dir, base_name + ".txt")
         
+        # Initialize pdf_metadata for all file types
+        pdf_metadata = {}
+        
         print(f"\n*** Processing file: {filename} ***")
         print(f"*** Transcript file: {transcript_filename} ***")
         
@@ -543,9 +546,12 @@ class UniversalRAGProcessor:
             loader = TextLoader(transcript_filename)
         elif filename.lower().endswith('.pdf'):
             loader = PyPDFLoader(filepath)
-            tokens = "\n".join([doc.page_content for doc in loader.load()])
+            pdf_documents = loader.load()
+            tokens = "\n".join([doc.page_content for doc in pdf_documents])
             with open(transcript_filename, "w") as file:
                 file.write(tokens)
+            # Store PDF metadata from the first page for later use
+            pdf_metadata = pdf_documents[0].metadata if pdf_documents else {}
         else:
             # Handle audio and video files with Whisper transcription
             file_type = "audio" if filename.lower().endswith(('.mp3', '.wav')) else "video"
@@ -571,10 +577,30 @@ class UniversalRAGProcessor:
             # Store original source (transcript file path) before overwriting
             original_source = doc.metadata.get("source", transcript_filename)
             
-            doc.metadata["doc_id"] = f"{base_name}_{idx}"
-            doc.metadata["source"] = filename  # Original source (filename)
-            doc.metadata["transcript_file"] = original_source  # Transcript file path
-            doc.metadata["source_type"] = "file"
+            # For PDF files, preserve only specific metadata fields
+            if filename.lower().endswith('.pdf') and pdf_metadata:
+                # Define allowed PDF metadata fields
+                allowed_fields = ['author', 'language', 'moddate', 'title', 'total_pages']
+                
+                # Clear existing metadata and add only allowed fields
+                new_metadata = {}
+                for field in allowed_fields:
+                    if field in pdf_metadata:
+                        new_metadata[field] = pdf_metadata[field]
+                
+                # Add required fields
+                new_metadata["doc_id"] = f"{base_name}_{idx}"
+                new_metadata["source"] = filename  # Original source (filename)
+                new_metadata["transcript_file"] = original_source  # Transcript file path
+                new_metadata["source_type"] = "file"
+                
+                doc.metadata = new_metadata
+            else:
+                # For non-PDF files, use existing metadata logic
+                doc.metadata["doc_id"] = f"{base_name}_{idx}"
+                doc.metadata["source"] = filename  # Original source (filename)
+                doc.metadata["transcript_file"] = original_source  # Transcript file path
+                doc.metadata["source_type"] = "file"
         
         print(f"*** Split transcript into {len(split_docs)} documents ***")
         self.all_documents.extend(split_docs)
