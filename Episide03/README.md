@@ -41,14 +41,21 @@ pip install -r requirements.txt
 
 This will install all the necessary dependencies:
 - `python-dotenv` - Environment variable management
-- `openai-whisper` - Audio transcription
-- `openai` - OpenAI API client
-- `langchain` - LangChain framework and components
-- `pypdf` - PDF text extraction
-- `docarray` - Document array operations
-- `requests` - HTTP requests for web scraping
-- `beautifulsoup4` - HTML parsing and content extraction
-- `lxml` - XML/HTML parser for BeautifulSoup
+- `openai-whisper` - Audio transcription using OpenAI Whisper models
+- `openai` - OpenAI API client for GPT models and embeddings
+- `langchain` - Core LangChain framework for LLM applications
+- `langchain-openai` - OpenAI integrations for LangChain (embeddings, chat models)
+- `langchain-community` - Community integrations and vector stores for LangChain
+- `langchain-pinecone` - Pinecone vector database integration for LangChain
+- `langchain-chroma` - ChromaDB vector database integration for LangChain
+- `pypdf` - PDF text extraction and processing
+- `docarray` - Document array operations for vector storage
+- `faiss-cpu` - Facebook AI Similarity Search for local vector storage
+- `requests` - HTTP requests for web scraping and API calls
+- `beautifulsoup4` - HTML parsing and content extraction from web pages
+- `lxml` - XML/HTML parser backend for BeautifulSoup
+- `tqdm` - Progress bars for long-running operations
+- `chromadb` - ChromaDB vector database engine
 
 
 ## Environment Setup
