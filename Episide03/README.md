@@ -11,9 +11,10 @@ This system:
 - **Extracts text**: Extracts readable text from PDFs and web pages 
 - **Creates searchable knowledge base**: Splits content into chunks and generates embeddings for semantic search
 - **Answers questions**: Uses RAG to find relevant content and generate answers using GPT-3.5-turbo
-- **Supports two storage options**: 
-  - In-memory vector store (default, no additional setup required)
+- **Supports three storage options**: 
+  - FAISS local vector store (default, persistent local storage)
   - Pinecone cloud vector database (optional, requires API key)
+  - ChromaDB vector database (optional, local persistent storage with advanced features)
 
 ## Prerequisites
 
@@ -68,7 +69,14 @@ PINECONE_API_KEY=your_pinecone_api_key_here
 PINECONE_INDEX=your_index_name
 ```
 
-**Note**: If `PINECONE_API_KEY` and `PINECONE_INDEX` are not provided, the system will automatically use an in-memory vector store instead.
+### Optional Variables (for ChromaDB integration)
+
+```env
+CHROMA_PATH=/path/to/chroma/database
+CHROMA_INDEX=your_collection_name
+```
+
+**Note**: If neither Pinecone nor ChromaDB credentials are provided, the system will automatically use FAISS local storage.
 
 ### Environment Variable Details
 
@@ -76,16 +84,23 @@ PINECONE_INDEX=your_index_name
 - **`TRANSCRIPT_DIR`**: Directory where transcript files will be stored/cached
 - **`PINECONE_API_KEY`** *(Optional)*: Your Pinecone API key for cloud vector storage
 - **`PINECONE_INDEX`** *(Optional)*: Name of your Pinecone index
+- **`CHROMA_PATH`** *(Optional)*: Directory path for ChromaDB database (defaults to './chroma_db')
+- **`CHROMA_INDEX`** *(Optional)*: ChromaDB collection name (defaults to 'default_index')
 
 ## Usage
 
 ### Basic Syntax
 
 ```bash
-# Process media files in a directory
+# Process media files in a directory (FAISS - default)
 python3 rag.py <MediaDirectory>
 
-# Process a single web page  
+# Process with specific storage backend
+python3 rag.py --store faiss <MediaDirectory>     # FAISS local storage
+python3 rag.py --store pinecone <MediaDirectory>  # Pinecone cloud storage  
+python3 rag.py --store chroma <MediaDirectory>    # ChromaDB local storage
+
+# Process a single web page
 python3 rag.py <URL>
 ```
 
@@ -112,7 +127,7 @@ python3 rag.py https://en.wikipedia.org/wiki/Artificial_intelligence
 
 python3 rag.py ./files
 
-*** No Pinecone configuration - using in-memory vector store ***
+*** No Pinecone configuration - using FAISS vector store ***
 
 *** Processing file: NIPS-2017-attention-is-all-you-need-Paper.pdf ***
 *** Transcript file: ./transcripts/NIPS-2017-attention-is-all-you-need-Paper.txt ***
@@ -139,7 +154,7 @@ A recurrent neural network (RNN) is a type of neural network that is designed to
 
 python3 rag.py ./files what is a transformer 
 
-*** No Pinecone configuration - using in-memory vector store ***
+*** No Pinecone configuration - using FAISS vector store ***
 
 *** Processing file: NIPS-2017-attention-is-all-you-need-Paper.pdf ***
 *** Transcript file: ./transcripts/NIPS-2017-attention-is-all-you-need-Paper.txt ***
@@ -156,15 +171,47 @@ python3 rag.py ./files what is a transformer
 *** Skipping extraction/transcription; text file already exists ***
 *** Split transcript into 134 documents ***
 
-*** Answer using in-memory vector store: ***
+*** Answer using FAISS vector store: ***
 A transformer is a model architecture that relies entirely on an attention mechanism to draw global dependencies between input and output, eschewing recurrence typically used in traditional sequence transduction models.
 
 ```
 
+#### Processing with ChromaDB
+
+```bash
+# First time setup with ChromaDB
+python3 rag.py --store chroma ./files
+
+*** Using ChromaDB vector store ***
+*** Created new Chroma collection: default_index ***
+
+*** Processing file: NIPS-2017-attention-is-all-you-need-Paper.pdf ***
+*** Added documents to ChromaDB collection ***
+
+*** Answer using ChromaDB: ***
+A transformer is a model architecture that relies entirely on an attention mechanism...
+
+# Subsequent runs with ChromaDB (uses cached transcripts)
+python3 rag.py --store chroma ./files "what is attention mechanism"
+
+*** Using ChromaDB vector store ***
+*** Found existing Chroma collection: default_index ***
+*** Skipping extraction/transcription; text file already exists ***
+*** Added documents to ChromaDB collection ***
+
+*** Answer using ChromaDB: ***
+The attention mechanism allows the model to focus on different parts of the input sequence...
+```
+
 ### Parameters
 
-- **`MediaDirectory`**: Path to directory containing your media files (supports .mp3, .wav, .txt, .pdf)
-- **`query`**: Your question or search query (can be multiple words)
+- **`MediaDirectory`**: Path to directory containing your media files (supports .mp3, .wav, .txt, .pdf, video files)
+- **`URL`**: Web page URL to process and add to knowledge base
+- **`--store`**: Storage backend (faiss, pinecone, chroma)
+- **`--chroma-path`**: Override ChromaDB database path
+- **`--chroma-index`**: Override ChromaDB collection name
+- **`--chunk-size`**: Text chunk size (default: 1000)
+- **`--chunk-overlap`**: Text chunk overlap (default: 400)
 
 ## How It Works
 
@@ -184,32 +231,84 @@ A transformer is a model architecture that relies entirely on an attention mecha
 
 ## Storage Options
 
-### In-Memory Vector Store (Default)
-- **Pros**: No additional setup, works immediately, free
-- **Cons**: Data lost when program ends, limited to available RAM
-- **Use case**: Quick queries, testing, small datasets
+### FAISS Vector Store (Default)
+- **Pros**: Local persistent storage, no API keys required, fast retrieval, free
+- **Cons**: Single-machine only, limited scalability
+- **Use case**: Personal use, development, medium datasets, offline usage
+- **Setup**: No additional configuration needed
 
 ### Pinecone Vector Store (Optional)
-- **Pros**: Persistent storage, scalable, fast retrieval
-- **Cons**: Requires API key and setup, may have usage costs
-- **Use case**: Production use, large datasets, persistent knowledge base
+- **Pros**: Cloud-based, highly scalable, managed service, fast retrieval
+- **Cons**: Requires API key and setup, usage costs, internet dependency
+- **Use case**: Production deployments, large datasets, team collaboration
+- **Setup**: Requires `PINECONE_API_KEY` and `PINECONE_INDEX`
 
-If you are using Pinecone and have already stored your embeddings by running the `rag.py` script, 
-but you wish to ask additional questions without having to re-create the embeddings, use the `ask.py` 
-script. The `rag.py` script is for extracting text from media files and web pages and creating the embeddings 
-and adding them to the vector store. There is no harm to reprocessing the same media files again
-with `rag.py`, but it will incur unnecessary costs for the embeddings. To avoid that,
-place new content in a different directory and provide that directory name to `rag.py`
+### ChromaDB Vector Store (Optional)
+- **Pros**: Local persistent storage, advanced metadata filtering, SQL-like queries, free
+- **Cons**: Additional dependencies, single-machine storage
+- **Use case**: Advanced local deployments, complex metadata queries, development
+- **Setup**: Requires `langchain-chroma` and `chromadb` packages (included in requirements.txt)
+
+### Querying Existing Vector Stores
+
+If you have already processed files and created embeddings with any storage backend, use the `ask.py` script for additional queries without reprocessing:
+
+```bash
+# Query existing FAISS index
+python3 ask.py "your question here"
+
+# Query existing Pinecone index  
+python3 ask.py --store pinecone "your question here"
+
+# Query existing ChromaDB collection
+python3 ask.py --store chroma "your question here"
+```
+
+The `rag.py` script handles content extraction and embedding creation, while `ask.py` only queries existing vector stores. For Pinecone users, this avoids unnecessary embedding costs when asking new questions.
 
 **Note**: Web page content is cached to the transcript directory just like media files, so re-running the same URL will use the cached content unless manually deleted.
 
+## ChromaDB Advanced Usage
+
+ChromaDB offers additional features beyond basic storage:
+
+### Custom Collection and Path
+```bash
+# Use custom ChromaDB path and collection name
+python3 rag.py --store chroma --chroma-path ./my_knowledge_base --chroma-index research_papers ./documents/
+
+# Override environment variables temporarily  
+python3 rag.py --store chroma --chroma-path /tmp/chroma_test --chroma-index test_collection ./files/
+```
+
+### Chunk Size Optimization
+```bash  
+# Use smaller chunks for better precision
+python3 rag.py --store chroma --chunk-size 500 --chunk-overlap 100 ./documents/
+
+# Use larger chunks for more context
+python3 rag.py --store chroma --chunk-size 2000 --chunk-overlap 500 ./documents/
+```
+
+### Querying ChromaDB
+```bash
+# Query with specific ChromaDB settings
+python3 ask.py --store chroma --chroma-path ./my_knowledge_base --chroma-index research_papers "What is machine learning?"
+
+# Use environment variables for repeated queries
+export CHROMA_PATH=./my_knowledge_base
+export CHROMA_INDEX=research_papers
+python3 ask.py --store chroma "Explain neural networks"
+```
+
 ## Output
 
-The system provides two responses when both storage options are available:
-1. Answer using in-memory vector store
-2. Answer using Pinecone (if configured)
+The system provides a single response using your configured storage backend:
+- **FAISS**: Local persistent vector store (default)
+- **Pinecone**: Cloud vector database (if API credentials provided)
+- **ChromaDB**: Local persistent vector database with advanced features
 
-If Pinecone credentials are not provided, only the in-memory response is shown.
+If no specific storage is configured, FAISS is used as the default.
 
 ## File Support
 
@@ -241,6 +340,8 @@ If Pinecone credentials are not provided, only the in-memory response is shown.
 
 - `"Error: OPENAI_API_KEY and TRANSCRIPT_DIR must be set"`: Check your `.env` file
 - `"Skipping Pinecone-based response (missing PINECONE_API_KEY)"`: Normal when Pinecone is not configured
+- `"Error: Chroma dependencies not installed"`: Install ChromaDB with `pip install langchain-chroma chromadb`
+- `"Error: Chroma database not found"`: ChromaDB collection doesn't exist, run `rag.py --store chroma` first
 - `"Index did not become available within 10 seconds"`: Pinecone index creation timeout (usually resolves on retry)
 
 ## License
