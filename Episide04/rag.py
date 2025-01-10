@@ -656,16 +656,37 @@ class UniversalRAGProcessor:
                 ids=[doc["id"] for doc in docs_with_ids]
             )
         else:
-            # Add new documents to existing index
-            print(f"*** Adding new documents to existing FAISS index ***")
-            print(f"*** Index had {self.vectorstore.index.ntotal} documents before merge ***")
-            new_vectorstore = FAISS.from_texts(
-                texts=[doc["page_content"] for doc in docs_with_ids],
-                embedding=self.embeddings,
-                metadatas=[doc["metadata"] for doc in docs_with_ids],
-                ids=[doc["id"] for doc in docs_with_ids]
-            )
-            self.vectorstore.merge_from(new_vectorstore)
+            # Check for existing documents and filter out duplicates
+            print(f"*** Checking for existing documents in FAISS index ***")
+            existing_ids = set()
+            if hasattr(self.vectorstore, 'docstore') and hasattr(self.vectorstore.docstore, '_dict'):
+                existing_ids = set(self.vectorstore.docstore._dict.keys())
+            
+            docs_to_add = []
+            skipped_count = 0
+            
+            for doc in docs_with_ids:
+                if doc["id"] in existing_ids:
+                    if self.args.verbose:
+                        print(f"*** Warning: Document ID '{doc['id']}' already exists, skipping ***")
+                    skipped_count += 1
+                else:
+                    docs_to_add.append(doc)
+            
+            if docs_to_add:
+                # Add new documents to existing index
+                print(f"*** Adding {len(docs_to_add)} new documents to existing FAISS index ***")
+                print(f"*** Index had {self.vectorstore.index.ntotal} documents before merge ***")
+                new_vectorstore = FAISS.from_texts(
+                    texts=[doc["page_content"] for doc in docs_to_add],
+                    embedding=self.embeddings,
+                    metadatas=[doc["metadata"] for doc in docs_to_add],
+                    ids=[doc["id"] for doc in docs_to_add]
+                )
+                self.vectorstore.merge_from(new_vectorstore)
+            
+            if skipped_count > 0:
+                print(f"*** Skipped {skipped_count} existing documents ***")
         
         # Save updated index to disk
         print(f"*** Saving FAISS index to: {self.store_path} ***")
@@ -700,8 +721,8 @@ class UniversalRAGProcessor:
                 else:
                     raise Exception("Index did not become available within 10 seconds.")
             
-            # Upload documents to Pinecone
-            print(f"*** Adding documents to Pinecone collection ***")
+            # Check for existing documents in Pinecone
+            print(f"*** Checking for existing documents in Pinecone index ***")
             
             docs_with_ids = [
                 {
@@ -712,18 +733,44 @@ class UniversalRAGProcessor:
                 for doc in self.all_documents
             ]
             
-            # Show progress bar during bulk upload
-            with tqdm(total=1, desc="Adding to Pinecone") as pbar:
-                vectorstore = PineconeVectorStore.from_texts(
-                    texts=[doc["page_content"] for doc in docs_with_ids],
-                    embedding=self.embeddings,
-                    metadatas=[doc["metadata"] for doc in docs_with_ids],
-                    ids=[doc["id"] for doc in docs_with_ids],
-                    index_name=self.pinecone_index_name
-                )
-                pbar.update(1)
+            # Get existing Pinecone index and check for duplicate IDs
+            pinecone_index = self.pinecone_client.Index(self.pinecone_index_name)
+            docs_to_add = []
+            skipped_count = 0
             
-            print(f"*** Added {len(self.all_documents)} new documents to Pinecone ***")
+            for doc in docs_with_ids:
+                # Check if document ID already exists in Pinecone
+                try:
+                    fetch_result = pinecone_index.fetch(ids=[doc["id"]])
+                    if fetch_result.vectors and doc["id"] in fetch_result.vectors:
+                        if self.args.verbose:
+                            print(f"*** Warning: Document ID '{doc['id']}' already exists, skipping ***")
+                        skipped_count += 1
+                    else:
+                        docs_to_add.append(doc)
+                except Exception as e:
+                    # If fetch fails, assume document doesn't exist
+                    docs_to_add.append(doc)
+            
+            if docs_to_add:
+                # Upload new documents to Pinecone
+                print(f"*** Adding {len(docs_to_add)} new documents to Pinecone collection ***")
+                
+                # Show progress bar during bulk upload
+                with tqdm(total=1, desc="Adding to Pinecone") as pbar:
+                    vectorstore = PineconeVectorStore.from_texts(
+                        texts=[doc["page_content"] for doc in docs_to_add],
+                        embedding=self.embeddings,
+                        metadatas=[doc["metadata"] for doc in docs_to_add],
+                        ids=[doc["id"] for doc in docs_to_add],
+                        index_name=self.pinecone_index_name
+                    )
+                    pbar.update(1)
+                
+                print(f"*** Added {len(docs_to_add)} new documents to Pinecone ***")
+            
+            if skipped_count > 0:
+                print(f"*** Skipped {skipped_count} existing documents ***")
             
             # Save processed files metadata
             save_processed_files(self.processed_files, self.processed_files_path)
@@ -738,9 +785,11 @@ class UniversalRAGProcessor:
         
         # Prepare documents for batch processing
         docs_to_add = []
+        skipped_count = 0
+        
         for doc in self.all_documents:
-            # Generate deterministic ID based on content
-            chunk_id = hashlib.sha256(doc.page_content.encode()).hexdigest()
+            # Use same filename-based ID as FAISS and Pinecone for consistency
+            chunk_id = doc.metadata["doc_id"]
             
             # Check if chunk already exists
             existing = self.chroma_collection.get(
@@ -748,7 +797,11 @@ class UniversalRAGProcessor:
                 include=[],
             )
             
-            if not existing['ids']:
+            if existing['ids']:
+                if self.args.verbose:
+                    print(f"*** Warning: Document ID '{chunk_id}' already exists, skipping ***")
+                skipped_count += 1
+            else:
                 # Add metadata for Chroma
                 doc.metadata.update({
                     "embedding_model": self.model_info.name,
@@ -788,6 +841,9 @@ class UniversalRAGProcessor:
                     continue
         
         print(f"*** Added {added_count} new documents to Chroma ***")
+        
+        if skipped_count > 0:
+            print(f"*** Skipped {skipped_count} existing documents ***")
 
 
 def main():
