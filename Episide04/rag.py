@@ -701,7 +701,7 @@ class UniversalRAGProcessor:
                     raise Exception("Index did not become available within 10 seconds.")
             
             # Upload documents to Pinecone
-            print(f"*** Uploading documents to Pinecone index '{self.pinecone_index_name}' ***")
+            print(f"*** Adding documents to Pinecone collection ***")
             
             docs_with_ids = [
                 {
@@ -712,15 +712,18 @@ class UniversalRAGProcessor:
                 for doc in self.all_documents
             ]
             
-            vectorstore = PineconeVectorStore.from_texts(
-                texts=[doc["page_content"] for doc in docs_with_ids],
-                embedding=self.embeddings,
-                metadatas=[doc["metadata"] for doc in docs_with_ids],
-                ids=[doc["id"] for doc in docs_with_ids],
-                index_name=self.pinecone_index_name
-            )
+            # Show progress bar during bulk upload
+            with tqdm(total=1, desc="Adding to Pinecone") as pbar:
+                vectorstore = PineconeVectorStore.from_texts(
+                    texts=[doc["page_content"] for doc in docs_with_ids],
+                    embedding=self.embeddings,
+                    metadatas=[doc["metadata"] for doc in docs_with_ids],
+                    ids=[doc["id"] for doc in docs_with_ids],
+                    index_name=self.pinecone_index_name
+                )
+                pbar.update(1)
             
-            print(f"*** Uploaded {len(self.all_documents)} documents successfully ***")
+            print(f"*** Added {len(self.all_documents)} new documents to Pinecone ***")
             
             # Save processed files metadata
             save_processed_files(self.processed_files, self.processed_files_path)
@@ -733,41 +736,55 @@ class UniversalRAGProcessor:
         """Save documents to Chroma"""
         print(f"*** Adding documents to Chroma collection ***")
         
+        # Prepare documents for batch processing
+        docs_to_add = []
+        for doc in self.all_documents:
+            # Generate deterministic ID based on content
+            chunk_id = hashlib.sha256(doc.page_content.encode()).hexdigest()
+            
+            # Check if chunk already exists
+            existing = self.chroma_collection.get(
+                ids=[chunk_id],
+                include=[],
+            )
+            
+            if not existing['ids']:
+                # Add metadata for Chroma
+                doc.metadata.update({
+                    "embedding_model": self.model_info.name,
+                    "embedding_dimension": self.model_info.dimension,
+                    "processed_at": str(datetime.datetime.now(datetime.UTC))
+                })
+                docs_to_add.append((doc.page_content, doc.metadata, chunk_id))
+        
+        if not docs_to_add:
+            print("*** No new documents to add to Chroma ***")
+            return
+        
+        # Batch processing with optimal batch size
+        batch_size = 100  # Optimal for Chroma performance
         added_count = 0
-        with tqdm(total=len(self.all_documents), desc="Adding to Chroma") as pbar:
-            for doc in self.all_documents:
+        
+        with tqdm(total=len(docs_to_add), desc="Adding to Chroma") as pbar:
+            for i in range(0, len(docs_to_add), batch_size):
+                batch = docs_to_add[i:i + batch_size]
+                
                 try:
-                    # Generate deterministic ID based on content
-                    chunk_id = hashlib.sha256(doc.page_content.encode()).hexdigest()
-                    
-                    # Check if chunk already exists
-                    existing = self.chroma_collection.get(
-                        ids=[chunk_id],
-                        include=[],
-                    )
-                    
-                    if existing['ids']:
-                        pbar.update(1)
-                        continue
-                    
-                    # Add metadata for Chroma
-                    doc.metadata.update({
-                        "embedding_model": self.model_info.name,
-                        "embedding_dimension": self.model_info.dimension,
-                        "processed_at": str(datetime.datetime.now(datetime.UTC))
-                    })
+                    texts = [item[0] for item in batch]
+                    metadatas = [item[1] for item in batch]
+                    ids = [item[2] for item in batch]
                     
                     self.vectorstore.add_texts(
-                        texts=[doc.page_content],
-                        metadatas=[doc.metadata],
-                        ids=[chunk_id]
+                        texts=texts,
+                        metadatas=metadatas,
+                        ids=ids
                     )
-                    added_count += 1
-                    pbar.update(1)
+                    added_count += len(batch)
+                    pbar.update(len(batch))
                     
                 except Exception as e:
-                    print(f"\nError adding document: {e}")
-                    pbar.update(1)
+                    print(f"\nError adding batch: {e}")
+                    pbar.update(len(batch))
                     continue
         
         print(f"*** Added {added_count} new documents to Chroma ***")
@@ -861,12 +878,10 @@ Examples:
         processor._setup_vector_store()
         
         # Process all inputs
-        with tqdm(total=len(args.inputs), desc="Processing inputs", unit="item") as pbar:
-            for input_path in args.inputs:
-                if args.verbose:
-                    print(f"\nProcessing: {input_path}")
-                processor.process_input(input_path)
-                pbar.update(1)
+        for input_path in args.inputs:
+            if args.verbose:
+                print(f"\nProcessing: {input_path}")
+            processor.process_input(input_path)
         
         # Save to vector store
         processor.save_to_vector_store()
