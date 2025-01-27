@@ -65,8 +65,8 @@ parser.add_argument("--chroma-path", help="Chroma database path (default: CHROMA
 parser.add_argument("--chroma-index", help="Chroma collection name (default: CHROMA_INDEX env or 'default_index')")
 parser.add_argument("-k", "--top-k", type=int, default=4, help="Number of similar documents to retrieve (default: 4)")
 parser.add_argument("--rerank", action="store_true", help="Enable reranking with HuggingFace models")
-parser.add_argument("--rerank-model", choices=["fast", "balanced", "quality", "best"], default="balanced",
-                   help="Reranking model preset (default: balanced)")
+parser.add_argument("--rerank-model", choices=["fast", "balanced", "quality", "best"], default="quality",
+                   help="Reranking model preset (default: quality)")
 parser.add_argument("--rerank-top-k", "-kk", type=int, help="Number of documents to return after reranking (default: same as --top-k)")
 parser.add_argument("--show-rerank-results", action="store_true", help="Show detailed reranking results (requires --verbose)")
 parser.add_argument("--preview-bytes", type=int, default=0, help="Number of bytes to show from each document in references (default: 0, no content)")
