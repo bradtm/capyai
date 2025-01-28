@@ -5,6 +5,7 @@ Modular reranking system for improving retrieval results using various reranker 
 from .reranker import (
     HuggingFaceReranker,
     Qwen3Reranker,
+    MLXQwen3Reranker,
     BaseReranker,
     RerankResult,
     create_reranker,
@@ -13,7 +14,8 @@ from .reranker import (
 
 __all__ = [
     "HuggingFaceReranker",
-    "Qwen3Reranker", 
+    "Qwen3Reranker",
+    "MLXQwen3Reranker",
     "BaseReranker",
     "RerankResult",
     "create_reranker",

@@ -46,6 +46,7 @@ Examples:
   %(prog)s --rerank "What is deep learning?"
   %(prog)s --store pinecone --rerank --rerank-type huggingface --rerank-model quality "Explain transformers"
   %(prog)s --rerank --rerank-type qwen3 --rerank-model qwen3-8b "Machine learning algorithms"
+  %(prog)s --rerank --rerank-type mlx-qwen3 --rerank-model mlx-qwen3-8b "Fast Apple Silicon reranking"
   %(prog)s --rerank -kk 3 "Machine learning algorithms"
   
   # Show reranking results (requires verbose mode)
@@ -66,8 +67,8 @@ parser.add_argument("--chroma-path", help="Chroma database path (default: CHROMA
 parser.add_argument("--chroma-index", help="Chroma collection name (default: CHROMA_INDEX env or 'default_index')")
 parser.add_argument("-k", "--top-k", type=int, default=4, help="Number of similar documents to retrieve (default: 4)")
 parser.add_argument("--rerank", action="store_true", help="Enable reranking with HuggingFace or Qwen3 models")
-parser.add_argument("--rerank-type", choices=["huggingface", "qwen3"], default="huggingface",
-                   help="Type of reranker to use (default: huggingface)")
+parser.add_argument("--rerank-type", choices=["huggingface", "qwen3", "mlx-qwen3"], default="huggingface",
+                   help="Type of reranker to use (default: huggingface). Use mlx-qwen3 for Apple Silicon optimization")
 parser.add_argument("--rerank-model", default="quality",
                    help="Reranking model name or preset (default: quality)")
 parser.add_argument("--rerank-top-k", "-kk", type=int, help="Number of documents to return after reranking (default: same as --top-k)")
@@ -80,7 +81,10 @@ query = " ".join(args.query)
 
 # Validate reranking arguments
 if args.rerank and not RERANKING_AVAILABLE:
-    print("Error: Reranking dependencies not installed. Run: pip install sentence-transformers (for HuggingFace) or transformers torch (for Qwen3)")
+    print("Error: Reranking dependencies not installed.")
+    print("- HuggingFace: pip install sentence-transformers")
+    print("- Qwen3: pip install transformers torch") 
+    print("- MLX-Qwen3 (Apple Silicon): pip install mlx mlx-lm")
     sys.exit(1)
 
 # Set rerank_top_k default

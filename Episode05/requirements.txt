@@ -18,4 +18,5 @@ langchain_ollama
 langchain_anthropic
 sentence-transformers
 accelerate
-
+mlx 
+mlx-lm
