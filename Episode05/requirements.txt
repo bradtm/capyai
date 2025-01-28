@@ -17,3 +17,5 @@ chromadb
 langchain_ollama
 langchain_anthropic
 sentence-transformers
+accelerate
+

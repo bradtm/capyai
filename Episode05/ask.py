@@ -22,7 +22,7 @@ except ImportError:
 
 # Optional reranking imports
 try:
-    from rerank_core import HuggingFaceReranker
+    from rerank_core import create_reranker, get_available_models
     RERANKING_AVAILABLE = True
 except ImportError:
     RERANKING_AVAILABLE = False
@@ -44,7 +44,8 @@ Examples:
   
   # Query with reranking (any store)
   %(prog)s --rerank "What is deep learning?"
-  %(prog)s --store pinecone --rerank --rerank-model quality "Explain transformers"
+  %(prog)s --store pinecone --rerank --rerank-type huggingface --rerank-model quality "Explain transformers"
+  %(prog)s --rerank --rerank-type qwen3 --rerank-model qwen3-8b "Machine learning algorithms"
   %(prog)s --rerank -kk 3 "Machine learning algorithms"
   
   # Show reranking results (requires verbose mode)
@@ -64,9 +65,11 @@ parser.add_argument("--pinecone-index", help="Pinecone index name")
 parser.add_argument("--chroma-path", help="Chroma database path (default: CHROMA_PATH env or './chroma_db')")
 parser.add_argument("--chroma-index", help="Chroma collection name (default: CHROMA_INDEX env or 'default_index')")
 parser.add_argument("-k", "--top-k", type=int, default=4, help="Number of similar documents to retrieve (default: 4)")
-parser.add_argument("--rerank", action="store_true", help="Enable reranking with HuggingFace models")
-parser.add_argument("--rerank-model", choices=["fast", "balanced", "quality", "best"], default="quality",
-                   help="Reranking model preset (default: quality)")
+parser.add_argument("--rerank", action="store_true", help="Enable reranking with HuggingFace or Qwen3 models")
+parser.add_argument("--rerank-type", choices=["huggingface", "qwen3"], default="huggingface",
+                   help="Type of reranker to use (default: huggingface)")
+parser.add_argument("--rerank-model", default="quality",
+                   help="Reranking model name or preset (default: quality)")
 parser.add_argument("--rerank-top-k", "-kk", type=int, help="Number of documents to return after reranking (default: same as --top-k)")
 parser.add_argument("--show-rerank-results", action="store_true", help="Show detailed reranking results (requires --verbose)")
 parser.add_argument("--preview-bytes", type=int, default=0, help="Number of bytes to show from each document in references (default: 0, no content)")
@@ -77,7 +80,7 @@ query = " ".join(args.query)
 
 # Validate reranking arguments
 if args.rerank and not RERANKING_AVAILABLE:
-    print("Error: Reranking dependencies not installed. Run: pip install sentence-transformers")
+    print("Error: Reranking dependencies not installed. Run: pip install sentence-transformers (for HuggingFace) or transformers torch (for Qwen3)")
     sys.exit(1)
 
 # Set rerank_top_k default
@@ -126,7 +129,7 @@ if args.verbose:
     print(f"*** Using OpenAI model: {OPENAI_MODEL}")
     print(f"*** Using OpenAI embedding model: {OPENAI_EMBEDDING_MODEL}")
     if args.rerank:
-        print(f"*** Reranking enabled with model: {args.rerank_model}")
+        print(f"*** Reranking enabled with {args.rerank_type} model: {args.rerank_model}")
 
 # Setup LangChain components
 model = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model=OPENAI_MODEL)
@@ -137,7 +140,10 @@ embeddings = OpenAIEmbeddings(model=OPENAI_EMBEDDING_MODEL)
 reranker = None
 if args.rerank:
     try:
-        reranker = HuggingFaceReranker(model_name=args.rerank_model)
+        reranker = create_reranker(
+            reranker_type=args.rerank_type,
+            model_name=args.rerank_model
+        )
         if args.verbose:
             print(f"*** Reranker initialized successfully ***")
     except Exception as e:
