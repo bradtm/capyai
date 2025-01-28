@@ -245,7 +245,16 @@ class Qwen3Reranker(BaseReranker):
             model_name = self.DEFAULT_MODELS[model_name]
         
         self.model_name = model_name
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        # Apple Silicon M2 optimization: prefer MPS (Metal) over CPU
+        if device is None:
+            if torch.backends.mps.is_available():
+                self.device = "mps"
+            elif torch.cuda.is_available():
+                self.device = "cuda" 
+            else:
+                self.device = "cpu"
+        else:
+            self.device = device
         self._tokenizer = None
         self._model = None
         self._is_loaded = False
@@ -258,12 +267,29 @@ class Qwen3Reranker(BaseReranker):
                     print(f"*** Loading Qwen3 reranker model: {self.model_name} ***")
                 
                 self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-                self._model = AutoModelForCausalLM.from_pretrained(
-                    self.model_name,
-                    torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                    device_map=self.device,
-                    trust_remote_code=True
-                )
+                # Load model with appropriate settings for different devices
+                if self.device == "mps":
+                    # MPS (Apple Silicon Metal) settings
+                    self._model = AutoModelForCausalLM.from_pretrained(
+                        self.model_name,
+                        torch_dtype=torch.float16,
+                        trust_remote_code=True
+                    ).to(self.device)
+                elif self.device == "cuda":
+                    # CUDA GPU settings
+                    self._model = AutoModelForCausalLM.from_pretrained(
+                        self.model_name,
+                        torch_dtype=torch.float16,
+                        device_map=self.device,
+                        trust_remote_code=True
+                    )
+                else:
+                    # CPU settings
+                    self._model = AutoModelForCausalLM.from_pretrained(
+                        self.model_name,
+                        torch_dtype=torch.float32,
+                        trust_remote_code=True
+                    ).to(self.device)
                 self._model.eval()
                 self._is_loaded = True
                 
