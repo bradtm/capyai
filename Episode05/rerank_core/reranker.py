@@ -74,7 +74,7 @@ class HuggingFaceReranker:
             try:
                 if verbose:
                     print(f"*** Loading reranker model: {self.model_name} ***")
-                self._model = CrossEncoder(self.model_name, device=self.device)
+                self._model = CrossEncoder(self.model_name, device=self.device, trust_remote_code=True)
                 self._is_loaded = True
                 if verbose:
                     print(f"*** Reranker model loaded successfully ***")

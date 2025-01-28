@@ -98,7 +98,7 @@ if not OPENAI_API_KEY:
 if args.store == "faiss":
     FAISS_INDEX_PATH = args.faiss_path or os.getenv("FAISS_INDEX_PATH", "faiss_index")
     if not os.path.exists(FAISS_INDEX_PATH):
-        print(f"Error: FAISS index not found at '{FAISS_INDEX_PATH}'. Run rag-improved.py first to create the index.")
+        print(f"Error: FAISS index not found at '{FAISS_INDEX_PATH}'. Run rag.py first to create the index.")
         sys.exit(1)
     if args.verbose:
         print(f"*** Using local FAISS vector store: {FAISS_INDEX_PATH} ***")
@@ -117,7 +117,7 @@ elif args.store == "chroma":
     CHROMA_PATH = args.chroma_path or os.getenv("CHROMA_PATH", "./chroma_db")
     CHROMA_INDEX = args.chroma_index or os.getenv("CHROMA_INDEX", "default_index")
     if not os.path.exists(CHROMA_PATH):
-        print(f"Error: Chroma database not found at '{CHROMA_PATH}'. Run rag-improved.py first to create the database.")
+        print(f"Error: Chroma database not found at '{CHROMA_PATH}'. Run rag.py first to create the database.")
         sys.exit(1)
     if args.verbose:
         print(f"*** Using Chroma vector store: {CHROMA_PATH}/{CHROMA_INDEX} ***")
