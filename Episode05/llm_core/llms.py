@@ -58,7 +58,17 @@ class OpenAILLM(BaseLLM):
         "gpt-3.5": "gpt-3.5-turbo",
         "gpt-4": "gpt-4",
         "gpt-4-mini": "gpt-4o-mini",
-        "gpt-4o": "gpt-4o"
+        "gpt-4o": "gpt-4o",
+        "gpt-4o-mini": "gpt-4o-mini",
+        "gpt-4.1": "gpt-4.1",
+        "gpt-4.1-mini": "gpt-4.1-mini", 
+        "gpt-4.1-nano": "gpt-4.1-nano",
+        "gpt-5": "gpt-5",
+        "gpt-5-mini": "gpt-5-mini",
+        "gpt-5-nano": "gpt-5-nano",
+        "o3": "o3",
+        "o3-mini": "o3-mini",
+        "o4-mini": "o4-mini"
     }
     
     def __init__(self, model_name: str = "gpt-3.5", api_key: Optional[str] = None, **kwargs):
@@ -124,7 +134,6 @@ class HuggingFaceLLM(BaseLLM):
     DEFAULT_MODELS = {
         "llama-3.1-8b": "meta-llama/Llama-3.1-8B-Instruct",
         "qwen2.5-14b": "Qwen/Qwen2.5-14B-Instruct", 
-        "gpt-oss-20b": "openai/gpt-oss-20b",
         "qwen3-4b": "Qwen/Qwen3-4B-Base",
         "t5gemma": "google/t5gemma-b-b-prefixlm",
         "gemma-3-1b": "google/gemma-3-1b-it"

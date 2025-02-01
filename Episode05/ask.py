@@ -69,9 +69,10 @@ Examples:
   %(prog)s --llm-type huggingface --llm-model qwen2.5-14b "Explain transformers"
   
   # Available HuggingFace model presets:
-  # llama-3.1-8b, qwen2.5-14b, gpt-oss-20b, qwen3-4b, t5gemma, gemma-3-1b
+  # llama-3.1-8b, qwen2.5-14b, qwen3-4b, t5gemma, gemma-3-1b
   # Available OpenAI model presets: 
-  # gpt-3.5, gpt-4, gpt-4-mini, gpt-4o
+  # gpt-3.5, gpt-4, gpt-4-mini, gpt-4o, gpt-4o-mini, gpt-4.1, gpt-4.1-mini, gpt-4.1-nano
+  # gpt-5, gpt-5-mini, gpt-5-nano, o3, o3-mini, o4-mini
     """
 )
 parser.add_argument("query", nargs="+", help="Query text to search for")
