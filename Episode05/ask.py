@@ -27,6 +27,13 @@ try:
 except ImportError:
     RERANKING_AVAILABLE = False
 
+# Optional LLM imports
+try:
+    from llm_core import create_llm, get_available_llm_models
+    LLM_CORE_AVAILABLE = True
+except ImportError:
+    LLM_CORE_AVAILABLE = False
+
 # Parse command line arguments
 parser = argparse.ArgumentParser(
     description="Query RAG system with FAISS, Pinecone, or Chroma vector stores",
@@ -55,6 +62,16 @@ Examples:
   # Control content preview in references
   %(prog)s --preview-bytes 200 "What is machine learning?"  # Show 200 bytes
   %(prog)s --preview-bytes 0 "What is deep learning?"       # No content (default)
+  
+  # Use different LLM models  
+  %(prog)s --llm-type openai --llm-model gpt-4 "What is AI?"
+  %(prog)s --llm-type huggingface --llm-model llama-3.1-8b "What is AI?"
+  %(prog)s --llm-type huggingface --llm-model qwen2.5-14b "Explain transformers"
+  
+  # Available HuggingFace model presets:
+  # llama-3.1-8b, qwen2.5-14b, gpt-oss-20b, qwen3-4b, t5gemma, gemma-3-1b
+  # Available OpenAI model presets: 
+  # gpt-3.5, gpt-4, gpt-4-mini, gpt-4o
     """
 )
 parser.add_argument("query", nargs="+", help="Query text to search for")
@@ -74,6 +91,10 @@ parser.add_argument("--rerank-model", default="quality",
 parser.add_argument("--rerank-top-k", "-kk", type=int, help="Number of documents to return after reranking (default: same as --top-k)")
 parser.add_argument("--show-rerank-results", action="store_true", help="Show detailed reranking results (requires --verbose)")
 parser.add_argument("--preview-bytes", type=int, default=0, help="Number of bytes to show from each document in references (default: 0, no content)")
+parser.add_argument("--llm-type", choices=["openai", "huggingface"], default="openai",
+                   help="Type of LLM to use (default: openai)")
+parser.add_argument("--llm-model", default="gpt-3.5",
+                   help="LLM model name or preset (default: gpt-3.5)")
 parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
 
 args = parser.parse_args()
@@ -130,14 +151,45 @@ elif args.store == "chroma":
         print(f"*** Using Chroma vector store: {CHROMA_PATH}/{CHROMA_INDEX} ***")
 
 if args.verbose:
-    print(f"*** Using OpenAI model: {OPENAI_MODEL}")
+    print(f"*** Using LLM type: {args.llm_type}, model: {args.llm_model}")
     print(f"*** Using OpenAI embedding model: {OPENAI_EMBEDDING_MODEL}")
     if args.rerank:
         print(f"*** Reranking enabled with {args.rerank_type} model: {args.rerank_model}")
 
-# Setup LangChain components
-model = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model=OPENAI_MODEL)
+# Setup LLM based on type
+if LLM_CORE_AVAILABLE and args.llm_type == "huggingface":
+    # Use modular HuggingFace LLM
+    try:
+        llm = create_llm(
+            llm_type="huggingface", 
+            model_name=args.llm_model,
+            max_length=512
+        )
+        if args.verbose:
+            print(f"*** Using modular HuggingFace LLM: {llm.get_model_name()} ***")
+    except Exception as e:
+        print(f"Error initializing HuggingFace LLM: {e}")
+        print("Falling back to OpenAI...")
+        args.llm_type = "openai"
+        llm = None
+
+if args.llm_type == "openai" or not LLM_CORE_AVAILABLE:
+    # Use OpenAI LLM (fallback or default)
+    if LLM_CORE_AVAILABLE:
+        llm = create_llm(
+            llm_type="openai",
+            model_name=args.llm_model,
+            api_key=OPENAI_API_KEY
+        )
+    else:
+        # Legacy ChatOpenAI for backward compatibility
+        model = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model=OPENAI_MODEL)
+        llm = None
+
 parser_output = StrOutputParser()
+# Ensure model is defined for backward compatibility
+if 'model' not in locals():
+    model = None
 embeddings = OpenAIEmbeddings(model=OPENAI_EMBEDDING_MODEL)
 
 # Setup reranker if requested
@@ -265,10 +317,20 @@ try:
     # Create the context string
     context = "\n\n".join([doc.page_content for doc in docs])
     
-    # Use the model directly since we already have the context
-    formatted_prompt = prompt.format_messages(context=context, question=query)
-    response = model.invoke(formatted_prompt)
-    answer = parser_output.invoke(response)
+    # Generate response using the appropriate LLM
+    if llm is not None:
+        # Use modular LLM system
+        formatted_prompt = template.format(context=context, question=query)
+        llm_response = llm.generate(
+            formatted_prompt,
+            max_tokens=512
+        )
+        answer = llm_response.content
+    else:
+        # Use legacy LangChain model (backward compatibility)
+        formatted_prompt = prompt.format_messages(context=context, question=query)
+        response = model.invoke(formatted_prompt)
+        answer = parser_output.invoke(response)
     
     print(f"\nAnswer: {answer}")
     
