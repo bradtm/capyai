@@ -132,16 +132,19 @@ class HuggingFaceLLM(BaseLLM):
     """
     
     DEFAULT_MODELS = {
-        "llama-3.1-8b": "meta-llama/Llama-3.1-8B-Instruct",
+        "llama-3.2-1b": "meta-llama/Llama-3.2-1B",
+        "llama-3.2-3b": "meta-llama/Llama-3.2-3B-Instruct",
         "qwen2.5-14b": "Qwen/Qwen2.5-14B-Instruct", 
         "qwen3-4b": "Qwen/Qwen3-4B-Base",
-        "t5gemma": "google/t5gemma-b-b-prefixlm",
-        "gemma-3-1b": "google/gemma-3-1b-it"
+        "qwen2.5-3b": "Qwen/Qwen2.5-3B-Instruct",
+        "gemma-3-1b": "google/gemma-3-1b-it",
+        "gemma-2-9b": "google/gemma-2-9b-it",
+        "gemma-2-2b": "google/gemma-2-2b-it"
     }
     
     def __init__(
         self, 
-        model_name: str = "llama-3.1-8b", 
+        model_name: str = "gemma-3-1b", 
         device: Optional[str] = None,
         max_length: int = 512,
         **kwargs
@@ -192,7 +195,8 @@ class HuggingFaceLLM(BaseLLM):
                 
                 self._tokenizer = AutoTokenizer.from_pretrained(
                     self.model_name,
-                    trust_remote_code=True
+                    trust_remote_code=True,
+                    token=True
                 )
                 
                 # Add padding token if missing
@@ -205,7 +209,8 @@ class HuggingFaceLLM(BaseLLM):
                     self._model = AutoModelForCausalLM.from_pretrained(
                         self.model_name,
                         torch_dtype=torch.float16,
-                        trust_remote_code=True
+                        trust_remote_code=True,
+                        token=True
                     ).to(self.device)
                 elif self.device == "cuda":
                     # CUDA GPU settings
@@ -213,14 +218,16 @@ class HuggingFaceLLM(BaseLLM):
                         self.model_name,
                         torch_dtype=torch.float16,
                         device_map="auto",
-                        trust_remote_code=True
+                        trust_remote_code=True,
+                        token=True
                     )
                 else:
                     # CPU settings
                     self._model = AutoModelForCausalLM.from_pretrained(
                         self.model_name,
                         torch_dtype=torch.float32,
-                        trust_remote_code=True
+                        trust_remote_code=True,
+                        token=True
                     ).to(self.device)
                 
                 self._model.eval()

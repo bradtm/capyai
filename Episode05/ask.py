@@ -65,11 +65,12 @@ Examples:
   
   # Use different LLM models  
   %(prog)s --llm-type openai --llm-model gpt-4 "What is AI?"
-  %(prog)s --llm-type huggingface --llm-model llama-3.1-8b "What is AI?"
+  %(prog)s --llm-type huggingface --llm-model llama-3.2-3b "What is AI?"
   %(prog)s --llm-type huggingface --llm-model qwen2.5-14b "Explain transformers"
   
   # Available HuggingFace model presets:
-  # llama-3.1-8b, qwen2.5-14b, qwen3-4b, t5gemma, gemma-3-1b
+  # llama-3.2-1b*, llama-3.2-3b*, qwen2.5-14b, qwen2.5-3b, qwen3-4b, gemma-3-1b, gemma-2-9b, gemma-2-2b
+  # * = Requires HuggingFace authentication and Meta approval
   # Available OpenAI model presets: 
   # gpt-3.5, gpt-4, gpt-4-mini, gpt-4o, gpt-4o-mini, gpt-4.1, gpt-4.1-mini, gpt-4.1-nano
   # gpt-5, gpt-5-mini, gpt-5-nano, o3, o3-mini, o4-mini
