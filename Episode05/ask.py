@@ -65,12 +65,11 @@ Examples:
   
   # Use different LLM models  
   %(prog)s --llm-type openai --llm-model gpt-4 "What is AI?"
-  %(prog)s --llm-type huggingface --llm-model llama-3.2-3b "What is AI?"
-  %(prog)s --llm-type huggingface --llm-model qwen2.5-14b "Explain transformers"
+  %(prog)s --llm-type huggingface --llm-model gemma-3-1b "What is AI?"
+  %(prog)s --llm-type huggingface --llm-model gemma-3-1b --device mps "Explain transformers"
   
   # Available HuggingFace model presets:
-  # llama-3.2-1b*, llama-3.2-3b*, qwen2.5-14b, qwen2.5-3b, qwen3-4b, gemma-3-1b, gemma-2-9b, gemma-2-2b
-  # * = Requires HuggingFace authentication and Meta approval
+  # gemma-3-1b (1B parameters, fast and reliable on M2)
   # Available OpenAI model presets: 
   # gpt-3.5, gpt-4, gpt-4-mini, gpt-4o, gpt-4o-mini, gpt-4.1, gpt-4.1-mini, gpt-4.1-nano
   # gpt-5, gpt-5-mini, gpt-5-nano, o3, o3-mini, o4-mini
@@ -93,10 +92,12 @@ parser.add_argument("--rerank-model", default="quality",
 parser.add_argument("--rerank-top-k", "-kk", type=int, help="Number of documents to return after reranking (default: same as --top-k)")
 parser.add_argument("--show-rerank-results", action="store_true", help="Show detailed reranking results (requires --verbose)")
 parser.add_argument("--preview-bytes", type=int, default=0, help="Number of bytes to show from each document in references (default: 0, no content)")
-parser.add_argument("--llm-type", choices=["openai", "huggingface"], default="openai",
+parser.add_argument("--llm-type", choices=["openai", "huggingface", "ollama"], default="openai",
                    help="Type of LLM to use (default: openai)")
 parser.add_argument("--llm-model", default="gpt-3.5",
                    help="LLM model name or preset (default: gpt-3.5)")
+parser.add_argument("--device", choices=["auto", "cpu", "mps", "cuda"], default="auto",
+                   help="Device for HuggingFace models (default: auto)")
 parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
 
 args = parser.parse_args()
@@ -165,12 +166,28 @@ if LLM_CORE_AVAILABLE and args.llm_type == "huggingface":
         llm = create_llm(
             llm_type="huggingface", 
             model_name=args.llm_model,
-            max_length=512
+            max_length=512,
+            device=None if args.device == "auto" else args.device
         )
         if args.verbose:
             print(f"*** Using modular HuggingFace LLM: {llm.get_model_name()} ***")
     except Exception as e:
         print(f"Error initializing HuggingFace LLM: {e}")
+        print("Falling back to OpenAI...")
+        args.llm_type = "openai"
+        llm = None
+
+elif LLM_CORE_AVAILABLE and args.llm_type == "ollama":
+    # Use modular Ollama LLM
+    try:
+        llm = create_llm(
+            llm_type="ollama",
+            model_name=args.llm_model
+        )
+        if args.verbose:
+            print(f"*** Using modular Ollama LLM: {llm.get_model_name()} ***")
+    except Exception as e:
+        print(f"Error initializing Ollama LLM: {e}")
         print("Falling back to OpenAI...")
         args.llm_type = "openai"
         llm = None
@@ -322,7 +339,19 @@ try:
     # Generate response using the appropriate LLM
     if llm is not None:
         # Use modular LLM system
-        formatted_prompt = template.format(context=context, question=query)
+        if args.llm_type in ["huggingface", "ollama"]:
+            # Use more direct template for local models to avoid multiple choice format
+            direct_template = """Based on the following context, answer the question directly and concisely. Do not format as multiple choice.
+
+Context: {context}
+
+Question: {question}
+
+Direct answer:"""
+            formatted_prompt = direct_template.format(context=context, question=query)
+        else:
+            formatted_prompt = template.format(context=context, question=query)
+            
         llm_response = llm.generate(
             formatted_prompt,
             max_tokens=512
