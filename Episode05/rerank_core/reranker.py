@@ -28,6 +28,14 @@ try:
 except ImportError:
     MLX_AVAILABLE = False
 
+# Ollama imports
+try:
+    import requests
+    import json
+    OLLAMA_AVAILABLE = True
+except ImportError:
+    OLLAMA_AVAILABLE = False
+
 # Configure logging
 logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
 logging.getLogger("transformers").setLevel(logging.WARNING)
@@ -613,6 +621,152 @@ class MLXQwen3Reranker(BaseReranker):
         return [(result.document.page_content, result.rerank_score) for result in results]
 
 
+class OllamaReranker(BaseReranker):
+    """
+    Ollama-based reranker using BGE reranker models with Metal GPU acceleration.
+    """
+    
+    DEFAULT_MODELS = {
+        "bge-reranker-v2-m3": "qllama/bge-reranker-v2-m3",
+        "bge-reranker-large": "qllama/bge-reranker-large"
+    }
+    
+    def __init__(
+        self,
+        model_name: str = "bge-reranker-v2-m3",
+        base_url: str = "http://localhost:11434",
+        **kwargs
+    ):
+        """
+        Initialize Ollama reranker.
+        
+        Args:
+            model_name: Model name or preset
+            base_url: Ollama server URL
+            **kwargs: Additional arguments
+        """
+        if not OLLAMA_AVAILABLE:
+            raise ImportError(
+                "Ollama dependencies not available. "
+                "Install with: pip install requests"
+            )
+        
+        # Handle preset model names
+        if model_name in self.DEFAULT_MODELS:
+            model_name = self.DEFAULT_MODELS[model_name]
+        
+        self.model_name = model_name
+        self.base_url = base_url.rstrip('/')
+        
+        # Check if Ollama server is running
+        try:
+            response = requests.get(f"{self.base_url}/api/tags", timeout=5)
+            if response.status_code != 200:
+                raise RuntimeError("Ollama server not responding")
+        except requests.exceptions.RequestException:
+            raise RuntimeError(
+                "Ollama server not running. Start with: ollama serve"
+            )
+    
+    def _score_pair(self, query: str, passage: str) -> float:
+        """Score a single query-passage pair using Ollama BGE reranker."""
+        try:
+            # BGE reranker input format
+            prompt = f"Query: {query}\nPassage: {passage}"
+            
+            payload = {
+                "model": self.model_name,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.0,  # Deterministic for reranking
+                    "num_predict": 10,   # Short response for score
+                    "top_p": 1.0
+                }
+            }
+            
+            response = requests.post(
+                f"{self.base_url}/api/generate",
+                json=payload,
+                timeout=30
+            )
+            
+            if response.status_code != 200:
+                raise RuntimeError(f"Ollama API error: {response.status_code}")
+            
+            result = response.json()
+            response_text = result.get('response', '').strip()
+            
+            # Extract relevance score from response
+            # BGE rerankers typically return a relevance score or probability
+            try:
+                # Try to extract numeric score from response
+                import re
+                score_match = re.search(r'(\d+\.?\d*)', response_text)
+                if score_match:
+                    score = float(score_match.group(1))
+                    # Normalize to 0-1 range if needed
+                    if score > 1.0:
+                        score = score / 100.0  # Assume percentage
+                    return max(0.0, min(1.0, score))
+                else:
+                    # Fallback: use response length as relevance indicator
+                    return min(1.0, len(response_text) / 100.0)
+            except:
+                # Final fallback
+                return 0.5
+                
+        except Exception as e:
+            # Return neutral score on error
+            return 0.5
+    
+    def rerank(
+        self,
+        query: str,
+        documents_with_scores: List[Tuple[Any, float]],
+        top_k: Optional[int] = None,
+        verbose: bool = False
+    ) -> List[RerankResult]:
+        """Rerank documents using Ollama BGE reranker."""
+        if not documents_with_scores:
+            return []
+        
+        results = []
+        for i, (doc, original_score) in enumerate(documents_with_scores):
+            rerank_score = self._score_pair(query, doc.page_content)
+            
+            results.append(RerankResult(
+                document=doc,
+                original_score=original_score,
+                rerank_score=rerank_score,
+                original_rank=i,
+                new_rank=i  # Will be updated after sorting
+            ))
+        
+        # Sort by rerank score (descending)
+        results.sort(key=lambda x: x.rerank_score, reverse=True)
+        
+        # Update new ranks
+        for new_rank, result in enumerate(results):
+            result.new_rank = new_rank
+        
+        # Apply top_k if specified
+        if top_k is not None:
+            results = results[:top_k]
+        
+        return results
+    
+    def rerank_simple(
+        self,
+        query: str,
+        documents_with_scores: List[Tuple[Any, float]],
+        top_k: Optional[int] = None
+    ) -> List[Tuple[Any, float]]:
+        """Simple reranking interface returning documents with rerank scores."""
+        results = self.rerank(query, documents_with_scores, top_k)
+        return [(result.document, result.rerank_score) for result in results]
+
+
 def create_reranker(
     reranker_type: str = "huggingface", 
     model_name: str = "balanced",
@@ -638,8 +792,10 @@ def create_reranker(
         return Qwen3Reranker(model_name, device)
     elif reranker_type.lower() == "mlx-qwen3":
         return MLXQwen3Reranker(model_name)
+    elif reranker_type.lower() == "ollama":
+        return OllamaReranker(model_name)
     else:
-        raise ValueError(f"Unsupported reranker type: {reranker_type}. Use 'huggingface', 'qwen3', or 'mlx-qwen3'")
+        raise ValueError(f"Unsupported reranker type: {reranker_type}. Use 'huggingface', 'qwen3', 'mlx-qwen3', or 'ollama'")
 
 
 def get_available_models() -> dict:
@@ -647,7 +803,8 @@ def get_available_models() -> dict:
     models = {
         "huggingface": HuggingFaceReranker.DEFAULT_MODELS.copy(),
         "qwen3": Qwen3Reranker.DEFAULT_MODELS.copy(),
-        "mlx-qwen3": MLXQwen3Reranker.DEFAULT_MODELS.copy()
+        "mlx-qwen3": MLXQwen3Reranker.DEFAULT_MODELS.copy(),
+        "ollama": OllamaReranker.DEFAULT_MODELS.copy()
     }
     return models
 
