@@ -10,7 +10,10 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_pinecone import PineconeVectorStore
 from langchain_community.vectorstores import FAISS
 from langchain_openai.embeddings import OpenAIEmbeddings
+from langchain_core.embeddings import Embeddings
 from langchain_core.runnables import RunnablePassthrough, RunnableParallel
+from typing import List
+import requests
 
 # Optional Chroma imports
 try:
@@ -19,6 +22,43 @@ try:
     CHROMA_AVAILABLE = True
 except ImportError:
     CHROMA_AVAILABLE = False
+
+
+class OllamaEmbeddings(Embeddings):
+    """Ollama embeddings using local models."""
+    def __init__(self, model: str = "bge-m3", base_url: str = "http://localhost:11434"):
+        self.model = model
+        self.base_url = base_url.rstrip('/')
+        
+        # Test connection
+        try:
+            response = requests.get(f"{self.base_url}/api/tags", timeout=5)
+            if response.status_code != 200:
+                raise RuntimeError("Ollama server not responding")
+        except requests.exceptions.RequestException:
+            raise RuntimeError("Ollama server not running. Start with: ollama serve")
+    
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        """Embed search documents using Ollama."""
+        embeddings = []
+        for text in texts:
+            response = requests.post(
+                f"{self.base_url}/api/embeddings",
+                json={"model": self.model, "prompt": text}
+            )
+            response.raise_for_status()
+            embeddings.append(response.json()["embedding"])
+        return embeddings
+    
+    def embed_query(self, text: str) -> List[float]:
+        """Embed a query using Ollama."""
+        response = requests.post(
+            f"{self.base_url}/api/embeddings", 
+            json={"model": self.model, "prompt": text}
+        )
+        response.raise_for_status()
+        return response.json()["embedding"]
+
 
 # Optional reranking imports
 try:
@@ -98,6 +138,8 @@ parser.add_argument("--llm-model", default="gpt-3.5",
                    help="LLM model name or preset (default: gpt-3.5)")
 parser.add_argument("--device", choices=["auto", "cpu", "mps", "cuda"], default="auto",
                    help="Device for HuggingFace models (default: auto)")
+parser.add_argument("--embedding-model", choices=["text-embedding-3-small", "text-embedding-3-large", "text-embedding-ada-002", "bge-m3", "nomic-embed-text"], 
+                   default="text-embedding-3-small", help="Embedding model to use (default: text-embedding-3-small)")
 parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
 
 args = parser.parse_args()
@@ -155,7 +197,6 @@ elif args.store == "chroma":
 
 if args.verbose:
     print(f"*** Using LLM type: {args.llm_type}, model: {args.llm_model}")
-    print(f"*** Using OpenAI embedding model: {OPENAI_EMBEDDING_MODEL}")
     if args.rerank:
         print(f"*** Reranking enabled with {args.rerank_type} model: {args.rerank_model}")
 
@@ -209,7 +250,15 @@ parser_output = StrOutputParser()
 # Ensure model is defined for backward compatibility
 if 'model' not in locals():
     model = None
-embeddings = OpenAIEmbeddings(model=OPENAI_EMBEDDING_MODEL)
+# Initialize embeddings based on selected model
+if args.embedding_model in ["bge-m3", "nomic-embed-text"]:
+    embeddings = OllamaEmbeddings(model=args.embedding_model)
+    if args.verbose:
+        print(f"*** Using Ollama embedding model: {args.embedding_model}")
+else:
+    embeddings = OpenAIEmbeddings(model=args.embedding_model)
+    if args.verbose:
+        print(f"*** Using OpenAI embedding model: {args.embedding_model}")
 
 # Setup reranker if requested
 reranker = None
