@@ -1,0 +1,208 @@
+"""
+HuggingFace-based reranking implementation for RAG systems.
+"""
+
+import logging
+from typing import List, Tuple, Optional, Any
+from dataclasses import dataclass
+
+try:
+    from sentence_transformers import CrossEncoder
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
+
+# Configure logging
+logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+logging.getLogger("transformers").setLevel(logging.WARNING)
+
+
+@dataclass
+class RerankResult:
+    """Result from reranking operation."""
+    document: Any  # LangChain document
+    original_score: float
+    rerank_score: float
+    original_rank: int
+    new_rank: int
+
+
+class HuggingFaceReranker:
+    """
+    HuggingFace-based document reranker using cross-encoder models.
+    
+    Popular models:
+    - ms-marco-MiniLM-L-6-v2: Fast, good general performance
+    - ms-marco-MiniLM-L-12-v2: Better quality, slightly slower
+    - bge-reranker-base: High quality Chinese/English support
+    - bge-reranker-large: Best quality but slower
+    """
+    
+    DEFAULT_MODELS = {
+        "fast": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+        "balanced": "cross-encoder/ms-marco-MiniLM-L-12-v2", 
+        "quality": "BAAI/bge-reranker-base",
+        "best": "BAAI/bge-reranker-large"
+    }
+    
+    def __init__(self, model_name: str = "balanced", device: Optional[str] = None):
+        """
+        Initialize the reranker.
+        
+        Args:
+            model_name: Model name or preset (fast/balanced/quality/best)
+            device: Device to run on (cuda/cpu/auto). Auto-detects if None.
+        """
+        if not SENTENCE_TRANSFORMERS_AVAILABLE:
+            raise ImportError(
+                "sentence-transformers is required for reranking. "
+                "Install with: pip install sentence-transformers"
+            )
+        
+        # Handle preset model names
+        if model_name in self.DEFAULT_MODELS:
+            model_name = self.DEFAULT_MODELS[model_name]
+        
+        self.model_name = model_name
+        self.device = device
+        self._model = None
+        self._is_loaded = False
+    
+    def _load_model(self, verbose=False):
+        """Lazy load the model on first use."""
+        if not self._is_loaded:
+            try:
+                if verbose:
+                    print(f"*** Loading reranker model: {self.model_name} ***")
+                self._model = CrossEncoder(self.model_name, device=self.device)
+                self._is_loaded = True
+                if verbose:
+                    print(f"*** Reranker model loaded successfully ***")
+            except Exception as e:
+                raise RuntimeError(f"Failed to load reranker model {self.model_name}: {e}")
+    
+    def rerank(
+        self, 
+        query: str, 
+        docs_with_scores: List[Tuple[Any, float]], 
+        top_k: Optional[int] = None,
+        verbose: bool = False
+    ) -> List[RerankResult]:
+        """
+        Rerank documents based on relevance to query.
+        
+        Args:
+            query: Search query
+            docs_with_scores: List of (document, original_score) tuples
+            top_k: Number of top documents to return. If None, returns all.
+            
+        Returns:
+            List of RerankResult objects sorted by rerank score (descending)
+        """
+        if not docs_with_scores:
+            return []
+        
+        self._load_model(verbose=verbose)
+        
+        # Prepare query-document pairs for cross-encoder
+        pairs = []
+        documents = []
+        original_scores = []
+        
+        for doc, score in docs_with_scores:
+            # Use page_content for reranking
+            doc_text = getattr(doc, 'page_content', str(doc))
+            pairs.append([query, doc_text])
+            documents.append(doc)
+            original_scores.append(score)
+        
+        # Get reranking scores
+        try:
+            rerank_scores = self._model.predict(pairs)
+        except Exception as e:
+            print(f"Warning: Reranking failed ({e}), returning original order")
+            # Fallback to original order if reranking fails
+            return [
+                RerankResult(
+                    document=doc,
+                    original_score=score,
+                    rerank_score=0.0,
+                    original_rank=i,
+                    new_rank=i
+                )
+                for i, (doc, score) in enumerate(docs_with_scores)
+            ]
+        
+        # Create results with both scores
+        results = []
+        for i, (doc, orig_score, rerank_score) in enumerate(zip(documents, original_scores, rerank_scores)):
+            results.append(RerankResult(
+                document=doc,
+                original_score=orig_score,
+                rerank_score=float(rerank_score),
+                original_rank=i,
+                new_rank=-1  # Will be set after sorting
+            ))
+        
+        # Sort by rerank score (descending)
+        results.sort(key=lambda x: x.rerank_score, reverse=True)
+        
+        # Update new ranks
+        for new_rank, result in enumerate(results):
+            result.new_rank = new_rank
+        
+        # Return top_k if specified
+        if top_k is not None:
+            results = results[:top_k]
+        
+        return results
+    
+    def rerank_simple(
+        self, 
+        query: str, 
+        docs_with_scores: List[Tuple[Any, float]], 
+        top_k: Optional[int] = None,
+        verbose: bool = False
+    ) -> List[Tuple[Any, float]]:
+        """
+        Simple reranking that returns docs with rerank scores.
+        
+        Args:
+            query: Search query
+            docs_with_scores: List of (document, original_score) tuples
+            top_k: Number of top documents to return
+            
+        Returns:
+            List of (document, rerank_score) tuples sorted by relevance
+        """
+        results = self.rerank(query, docs_with_scores, top_k, verbose=verbose)
+        return [(result.document, result.rerank_score) for result in results]
+
+
+def get_available_models() -> dict:
+    """Get available preset models."""
+    return HuggingFaceReranker.DEFAULT_MODELS.copy()
+
+
+def test_reranker(model_name: str = "fast") -> bool:
+    """Test if reranker can be loaded and used."""
+    try:
+        reranker = HuggingFaceReranker(model_name)
+        
+        # Simple test with dummy data
+        class DummyDoc:
+            def __init__(self, content):
+                self.page_content = content
+        
+        docs = [
+            (DummyDoc("This is about machine learning algorithms"), 0.8),
+            (DummyDoc("This discusses cooking recipes"), 0.7),
+            (DummyDoc("This explains neural networks"), 0.6)
+        ]
+        
+        results = reranker.rerank_simple("machine learning", docs, top_k=2)
+        return len(results) == 2
+        
+    except Exception as e:
+        print(f"Reranker test failed: {e}")
+        return False
