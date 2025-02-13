@@ -2,6 +2,7 @@
 
 import os
 import sys
+import json
 import argparse
 from collections import Counter
 from dotenv import load_dotenv
@@ -49,13 +50,24 @@ def analyze_faiss_index(faiss_path, num_entries=3, truncate_content=True, keys_o
     total_docs = vectorstore.index.ntotal
     embedding_dim = vectorstore.index.d
     
-    # print(f"\nTotal documents: {total_docs:,}")
-    # print(f"Embedding dimension: {embedding_dim}")
-    # print(f"Index type: {type(vectorstore.index).__name__}")
+    print(f"Index: {os.path.basename(faiss_path)}")
+    print(f"Document store contains {total_docs:,} chunks")
     
-    # if hasattr(vectorstore.index, 'metric_type'):
-    #     print(f"Distance metric: {vectorstore.index.metric_type}")
-
+    # Load and display index metadata
+    metadata_path = os.path.join(faiss_path, "index_metadata.json")
+    if os.path.exists(metadata_path):
+        try:
+            with open(metadata_path, 'r') as f:
+                metadata = json.load(f)
+                print(f"\nINDEX METADATA:")
+                for key, value in sorted(metadata.items()):
+                    print(f"   {key}: {value}")
+        except Exception as e:
+            print(f"*** Warning: Could not load index metadata: {e} ***")
+    
+    if total_docs == 0:
+        print("Index is empty")
+        return
 
     # Access the docstore to get metadata
     if hasattr(vectorstore, 'docstore') and hasattr(vectorstore.docstore, '_dict'):
@@ -65,39 +77,40 @@ def analyze_faiss_index(faiss_path, num_entries=3, truncate_content=True, keys_o
             # Analyze metadata
             source_files = Counter()
             
-            print(f"Document store contains {len(docstore_dict)} chunks")
-            
             for doc in docstore_dict.values():
                 if hasattr(doc, 'metadata'):
                     if 'source' in doc.metadata:
                         source_files[doc.metadata['source']] += 1
             
             # Source file statistics
-            print(f"\nSOURCE FILES ({len(source_files)} unique files):")
-            for file, count in source_files.most_common():
-                print(f"   • {file}: {count} chunks")
+            if source_files:
+                print(f"\nSOURCE FILES ({len(source_files)} unique files):")
+                for file, count in source_files.most_common():
+                    print(f"   • {file}: {count} chunks")
             
             # Show sample entries
             if num_entries > 0:
+                sample_size = min(num_entries, len(docstore_dict))
+                
                 if keys_only:
-                    entries_text = f"FIRST {num_entries} KEYS" if num_entries != 1 else "FIRST KEY"
+                    entries_text = f"FIRST {sample_size} KEYS" if sample_size != 1 else "FIRST KEY"
                     print(f"\n{entries_text}:")
                     print("-" * len(entries_text))
                     
-                    doc_items = list(docstore_dict.items())[:num_entries]
+                    doc_items = list(docstore_dict.items())[:sample_size]
                     for i, (doc_key, doc) in enumerate(doc_items, 1):
                         print(f"Key {i}: {doc_key}")
                 else:
-                    entries_text = f"FIRST {num_entries} ENTRIES" if num_entries != 1 else "FIRST ENTRY"
+                    entries_text = f"FIRST {sample_size} ENTRIES" if sample_size != 1 else "FIRST ENTRY"
                     print(f"\n{entries_text}:")
                     print("-" * len(entries_text))
                     
-                    doc_items = list(docstore_dict.items())[:num_entries]
+                    doc_items = list(docstore_dict.items())[:sample_size]
                     for i, (doc_key, doc) in enumerate(doc_items, 1):
                         print(f"\nEntry {i}:")
                         print(f"   Key: {doc_key}")
                         
-                        if hasattr(doc, 'metadata'):
+                        if hasattr(doc, 'metadata') and doc.metadata:
                             print(f"   Metadata:")
                             # Show all metadata fields, sorted for consistency
                             for key, value in sorted(doc.metadata.items()):
@@ -118,7 +131,9 @@ def analyze_faiss_index(faiss_path, num_entries=3, truncate_content=True, keys_o
                         else:
                             print(f"   Content: None")
         else:
-            print("️   Document store is empty or inaccessible")
+            print("No documents found in index")
+    else:
+        print("Document store is empty or inaccessible")
 
 
 def test_search(faiss_path, query="test search"):
