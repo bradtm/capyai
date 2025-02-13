@@ -497,10 +497,14 @@ class UniversalRAGProcessor:
                 # Store original source (transcript file path) before overwriting
                 original_source = doc.metadata.get("source", transcript_filename)
                 
-                doc.metadata["doc_id"] = f"{url_filename}_{idx}"
+                # Generate content hash for unique identification
+                content_hash = hashlib.sha256(doc.page_content.encode()).hexdigest()
+                doc.metadata["doc_id"] = content_hash
                 doc.metadata["source"] = url  # Original source (URL)
                 doc.metadata["transcript_file"] = original_source  # Transcript file path
                 doc.metadata["source_type"] = "url"
+                doc.metadata["chunk_index"] = idx
+                doc.metadata["total_chunks"] = len(split_docs)
             
             print(f"*** Split web page into {len(split_docs)} documents ***")
             self.all_documents.extend(split_docs)
@@ -589,18 +593,24 @@ class UniversalRAGProcessor:
                         new_metadata[field] = pdf_metadata[field]
                 
                 # Add required fields
-                new_metadata["doc_id"] = f"{base_name}_{idx}"
+                content_hash = hashlib.sha256(doc.page_content.encode()).hexdigest()
+                new_metadata["doc_id"] = content_hash
                 new_metadata["source"] = filename  # Original source (filename)
                 new_metadata["transcript_file"] = original_source  # Transcript file path
                 new_metadata["source_type"] = "file"
+                new_metadata["chunk_index"] = idx
+                new_metadata["total_chunks"] = len(split_docs)
                 
                 doc.metadata = new_metadata
             else:
                 # For non-PDF files, use existing metadata logic
-                doc.metadata["doc_id"] = f"{base_name}_{idx}"
+                content_hash = hashlib.sha256(doc.page_content.encode()).hexdigest()
+                doc.metadata["doc_id"] = content_hash
                 doc.metadata["source"] = filename  # Original source (filename)
                 doc.metadata["transcript_file"] = original_source  # Transcript file path
                 doc.metadata["source_type"] = "file"
+                doc.metadata["chunk_index"] = idx
+                doc.metadata["total_chunks"] = len(split_docs)
         
         print(f"*** Split transcript into {len(split_docs)} documents ***")
         self.all_documents.extend(split_docs)
@@ -733,23 +743,37 @@ class UniversalRAGProcessor:
                 for doc in self.all_documents
             ]
             
-            # Get existing Pinecone index and check for duplicate IDs
+            # Get existing Pinecone index and check for duplicate IDs using batch fetch
             pinecone_index = self.pinecone_client.Index(self.pinecone_index_name)
             docs_to_add = []
             skipped_count = 0
             
-            for doc in docs_with_ids:
-                # Check if document ID already exists in Pinecone
+            # Batch fetch existing IDs (Pinecone supports up to 1000 IDs per fetch)
+            all_ids = [doc["id"] for doc in docs_with_ids]
+            existing_ids = set()
+            batch_size = 100  # Conservative batch size for better reliability
+            
+            print(f"*** Checking {len(all_ids)} document IDs in batches of {batch_size} ***")
+            
+            for i in range(0, len(all_ids), batch_size):
+                batch_ids = all_ids[i:i + batch_size]
                 try:
-                    fetch_result = pinecone_index.fetch(ids=[doc["id"]])
-                    if fetch_result.vectors and doc["id"] in fetch_result.vectors:
-                        if self.args.verbose:
-                            print(f"*** Warning: Document ID '{doc['id']}' already exists, skipping ***")
-                        skipped_count += 1
-                    else:
-                        docs_to_add.append(doc)
+                    fetch_result = pinecone_index.fetch(ids=batch_ids)
+                    if fetch_result.vectors:
+                        existing_ids.update(fetch_result.vectors.keys())
                 except Exception as e:
-                    # If fetch fails, assume document doesn't exist
+                    # If batch fetch fails, assume none of the batch exists
+                    if self.args.verbose:
+                        print(f"*** Warning: Batch fetch failed for IDs {i}-{i+len(batch_ids)}: {e} ***")
+                    continue
+            
+            # Filter out existing documents
+            for doc in docs_with_ids:
+                if doc["id"] in existing_ids:
+                    if self.args.verbose:
+                        print(f"*** Warning: Document ID '{doc['id']}' already exists, skipping ***")
+                    skipped_count += 1
+                else:
                     docs_to_add.append(doc)
             
             if docs_to_add:
@@ -788,7 +812,7 @@ class UniversalRAGProcessor:
         skipped_count = 0
         
         for doc in self.all_documents:
-            # Use same filename-based ID as FAISS and Pinecone for consistency
+            # Use same content-based hash ID as FAISS and Pinecone for consistency
             chunk_id = doc.metadata["doc_id"]
             
             # Check if chunk already exists
