@@ -20,13 +20,6 @@ try:
 except ImportError:
     CHROMA_AVAILABLE = False
 
-# Optional reranking imports
-try:
-    from rerank_core import HuggingFaceReranker
-    RERANKING_AVAILABLE = True
-except ImportError:
-    RERANKING_AVAILABLE = False
-
 # Parse command line arguments
 parser = argparse.ArgumentParser(
     description="Query RAG system with FAISS, Pinecone, or Chroma vector stores",
@@ -41,18 +34,6 @@ Examples:
   
   # Query Chroma index
   %(prog)s --store chroma --chroma-path ./my_chroma "Explain neural networks"
-  
-  # Query with reranking (any store)
-  %(prog)s --rerank "What is deep learning?"
-  %(prog)s --store pinecone --rerank --rerank-model quality "Explain transformers"
-  %(prog)s --rerank -kk 3 "Machine learning algorithms"
-  
-  # Show reranking results (requires verbose mode)
-  %(prog)s --rerank --show-rerank-results -v "What is AI?"
-  
-  # Control content preview in references
-  %(prog)s --preview-bytes 200 "What is machine learning?"  # Show 200 bytes
-  %(prog)s --preview-bytes 0 "What is deep learning?"       # No content (default)
     """
 )
 parser.add_argument("query", nargs="+", help="Query text to search for")
@@ -64,25 +45,10 @@ parser.add_argument("--pinecone-index", help="Pinecone index name")
 parser.add_argument("--chroma-path", help="Chroma database path (default: CHROMA_PATH env or './chroma_db')")
 parser.add_argument("--chroma-index", help="Chroma collection name (default: CHROMA_INDEX env or 'default_index')")
 parser.add_argument("-k", "--top-k", type=int, default=4, help="Number of similar documents to retrieve (default: 4)")
-parser.add_argument("--rerank", action="store_true", help="Enable reranking with HuggingFace models")
-parser.add_argument("--rerank-model", choices=["fast", "balanced", "quality", "best"], default="quality",
-                   help="Reranking model preset (default: quality)")
-parser.add_argument("--rerank-top-k", "-kk", type=int, help="Number of documents to return after reranking (default: same as --top-k)")
-parser.add_argument("--show-rerank-results", action="store_true", help="Show detailed reranking results (requires --verbose)")
-parser.add_argument("--preview-bytes", type=int, default=0, help="Number of bytes to show from each document in references (default: 0, no content)")
 parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
 
 args = parser.parse_args()
 query = " ".join(args.query)
-
-# Validate reranking arguments
-if args.rerank and not RERANKING_AVAILABLE:
-    print("Error: Reranking dependencies not installed. Run: pip install sentence-transformers")
-    sys.exit(1)
-
-# Set rerank_top_k default
-if args.rerank_top_k is None:
-    args.rerank_top_k = args.top_k
 
 # Load environment variables
 load_dotenv()
@@ -125,24 +91,11 @@ elif args.store == "chroma":
 if args.verbose:
     print(f"*** Using OpenAI model: {OPENAI_MODEL}")
     print(f"*** Using OpenAI embedding model: {OPENAI_EMBEDDING_MODEL}")
-    if args.rerank:
-        print(f"*** Reranking enabled with model: {args.rerank_model}")
 
 # Setup LangChain components
 model = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model=OPENAI_MODEL)
 parser_output = StrOutputParser()
 embeddings = OpenAIEmbeddings(model=OPENAI_EMBEDDING_MODEL)
-
-# Setup reranker if requested
-reranker = None
-if args.rerank:
-    try:
-        reranker = HuggingFaceReranker(model_name=args.rerank_model)
-        if args.verbose:
-            print(f"*** Reranker initialized successfully ***")
-    except Exception as e:
-        print(f"Error initializing reranker: {e}")
-        sys.exit(1)
 
 # Setup LangChain components
 template = """
@@ -215,40 +168,6 @@ try:
     # Get documents with similarity scores
     docs_with_scores = get_documents_with_scores(vectorstore, query, args.store, k=args.top_k)
     
-    # Apply reranking if enabled
-    if reranker and docs_with_scores:
-        if args.verbose:
-            print(f"*** Reranking {len(docs_with_scores)} documents ***")
-        
-        # Rerank documents
-        reranked_results = reranker.rerank(query, docs_with_scores, top_k=args.rerank_top_k, verbose=args.verbose)
-        
-        # Show reranking results if requested
-        if args.show_rerank_results and args.verbose:
-            print(f"\n*** RERANKING RESULTS ***")
-            print(f"Original → New | Doc ID | Original Score → Rerank Score")
-            print("-" * 70)
-            for result in reranked_results:
-                doc_id = result.document.metadata.get('doc_id', 'unknown')[:12] + "..."
-                rank_change = f"{result.original_rank + 1:2d} → {result.new_rank + 1:2d}"
-                score_change = f"{result.original_score:6.3f} → {result.rerank_score:6.3f}"
-                
-                # Show rank change direction
-                if result.new_rank < result.original_rank:
-                    direction = "↑"
-                elif result.new_rank > result.original_rank:
-                    direction = "↓"
-                else:
-                    direction = "="
-                
-                print(f"{rank_change} {direction:1s} | {doc_id:15s} | {score_change}")
-        
-        # Convert back to docs_with_scores format with rerank scores
-        docs_with_scores = [(result.document, result.rerank_score) for result in reranked_results]
-        
-        if args.verbose:
-            print(f"*** Reranking complete, using top {len(docs_with_scores)} documents ***")
-    
     # Extract just the documents for the chain
     docs = [doc for doc, score in docs_with_scores]
     
@@ -264,47 +183,23 @@ try:
     
     # Show source documents with similarity scores
     if docs_with_scores:
-        score_type = "rerank" if reranker else "similarity"
         print(f"\nReferences: {len(docs_with_scores)} documents")
         for i, (doc, score) in enumerate(docs_with_scores, 1):
             doc_id = doc.metadata.get('doc_id', 'unknown')
             source = doc.metadata.get('source', 'unknown')
+            preview = doc.page_content[:100].replace('\n', ' ') + "..."
             
-            # Build source info with chunk information
-            chunk_index = doc.metadata.get('chunk_index')
-            total_chunks = doc.metadata.get('total_chunks')
-            if chunk_index is not None and total_chunks is not None:
-                source_info = f"from {source}, chunk {chunk_index + 1} of {total_chunks}"
-            else:
-                source_info = f"from {source}"
-            
-            # Handle content preview based on --preview-bytes
-            if args.preview_bytes > 0:
-                content = doc.page_content[:args.preview_bytes].replace('\n', ' ')
-                if len(doc.page_content) > args.preview_bytes:
-                    content += "..."
-                preview_text = f": {content}"
-            else:
-                preview_text = ""
-            
-            if reranker:
-                # Rerank scores are typically between -10 to 10 (higher is better)
-                print(f"  {i}. {doc_id} ({source_info}) [rerank: {score:.4f}]{preview_text}")
-            elif args.store == "pinecone":
+            if args.store == "pinecone":
                 # Pinecone scores are typically between 0-1 (higher is better)
-                print(f"  {i}. {doc_id} ({source_info}) [similarity: {score:.4f}]{preview_text}")
+                print(f"  {i}. {doc_id} (from {source}) [similarity: {score:.4f}]: {preview}")
             elif args.store == "faiss":
                 # FAISS scores are distances (lower is better), convert to similarity
                 similarity = 1 / (1 + score)  # Convert distance to similarity-like score
-                print(f"  {i}. {doc_id} ({source_info}) [similarity: {similarity:.4f}]{preview_text}")
+                print(f"  {i}. {doc_id} (from {source}) [similarity: {similarity:.4f}]: {preview}")
             elif args.store == "chroma":
                 # Chroma scores are distances (lower is better), convert to similarity
                 similarity = 1 / (1 + score)  # Convert distance to similarity-like score
-                print(f"  {i}. {doc_id} ({source_info}) [similarity: {similarity:.4f}]{preview_text}")
-            
-            # Add newline between references for better readability (only when showing content)
-            if args.preview_bytes > 0 and i < len(docs_with_scores):
-                print()
+                print(f"  {i}. {doc_id} (from {source}) [similarity: {similarity:.4f}]: {preview}")
     
 except Exception as e:
     print(f"Error querying vector store: {e}")
