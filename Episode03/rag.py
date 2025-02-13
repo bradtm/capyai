@@ -382,12 +382,23 @@ class UniversalRAGProcessor:
         """Setup FAISS vector store"""
         faiss_path = self.args.faiss_path or os.getenv("FAISS_INDEX_PATH", "faiss_index")
         self.processed_files_path = os.path.join(os.path.dirname(faiss_path), "processed_files.json")
+        self.faiss_metadata_path = os.path.join(faiss_path, "index_metadata.json")
         self.processed_files = load_processed_files(self.processed_files_path)
         
         if os.path.exists(faiss_path):
             print(f"*** Loading existing FAISS index from: {faiss_path} ***")
             self.vectorstore = FAISS.load_local(faiss_path, self.embeddings, allow_dangerous_deserialization=True)
             print(f"*** Loaded existing index with {self.vectorstore.index.ntotal} documents ***")
+            
+            # Load existing metadata if available
+            if os.path.exists(self.faiss_metadata_path):
+                try:
+                    with open(self.faiss_metadata_path, 'r') as f:
+                        existing_metadata = json.load(f)
+                        print(f"*** Index metadata: {existing_metadata.get('embedding_model', 'unknown')} model, "
+                              f"chunk_size={existing_metadata.get('chunk_size', 'unknown')} ***")
+                except Exception as e:
+                    print(f"*** Warning: Could not load index metadata: {e} ***")
         else:
             print(f"*** No existing FAISS index found. Will create new index ***")
             self.vectorstore = None
@@ -409,6 +420,25 @@ class UniversalRAGProcessor:
         self.pinecone_client = Pinecone(api_key=pinecone_api_key)
         self.pinecone_index_name = pinecone_index
         print(f"*** Using Pinecone vector store: {pinecone_index} ***")
+        
+        # Check if index exists and display metadata
+        try:
+            index_list = self.pinecone_client.list_indexes()
+            for index_info in index_list.indexes:
+                if index_info.name == pinecone_index:
+                    # Try to fetch metadata document
+                    try:
+                        pinecone_index = self.pinecone_client.Index(pinecone_index)
+                        metadata_doc = pinecone_index.fetch(ids=["__index_metadata__"])
+                        if metadata_doc.vectors and "__index_metadata__" in metadata_doc.vectors:
+                            metadata = metadata_doc.vectors["__index_metadata__"].metadata
+                            print(f"*** Index metadata: {metadata.get('embedding_model', 'unknown')} model, "
+                                  f"chunk_size={metadata.get('chunk_size', 'unknown')} ***")
+                    except Exception:
+                        pass  # No metadata document found
+                    break
+        except Exception as e:
+            print(f"*** Warning: Could not load index metadata: {e} ***")
     
     def _setup_chroma(self):
         """Setup Chroma vector store"""
@@ -702,6 +732,24 @@ class UniversalRAGProcessor:
         print(f"*** Saving FAISS index to: {self.store_path} ***")
         self.vectorstore.save_local(self.store_path)
         
+        # Save index metadata
+        index_metadata = {
+            "embedding_model": self.model_info.name,
+            "embedding_dimension": self.model_info.dimension,
+            "created_at": str(datetime.datetime.now(datetime.UTC)),
+            "chunk_size": self.args.chunk_size,
+            "chunk_overlap": self.args.chunk_overlap,
+            "total_documents": self.vectorstore.index.ntotal,
+            "last_updated": str(datetime.datetime.now(datetime.UTC))
+        }
+        
+        try:
+            os.makedirs(self.store_path, exist_ok=True)
+            with open(self.faiss_metadata_path, 'w') as f:
+                json.dump(index_metadata, f, indent=2)
+        except Exception as e:
+            print(f"*** Warning: Could not save index metadata: {e} ***")
+        
         total_docs = self.vectorstore.index.ntotal
         print(f"*** FAISS index now contains {total_docs} total documents ***")
         
@@ -795,6 +843,34 @@ class UniversalRAGProcessor:
             
             if skipped_count > 0:
                 print(f"*** Skipped {skipped_count} existing documents ***")
+            
+            # Save index metadata as a special document in Pinecone
+            try:
+                pinecone_index = self.pinecone_client.Index(self.pinecone_index_name)
+                
+                # Check if metadata document already exists
+                metadata_doc = pinecone_index.fetch(ids=["__index_metadata__"])
+                if not (metadata_doc.vectors and "__index_metadata__" in metadata_doc.vectors):
+                    # Create metadata document with dummy embedding
+                    index_metadata = {
+                        "embedding_model": self.model_info.name,
+                        "embedding_dimension": str(self.model_info.dimension),
+                        "created_at": str(datetime.datetime.now(datetime.UTC)),
+                        "chunk_size": str(self.args.chunk_size),
+                        "chunk_overlap": str(self.args.chunk_overlap),
+                        "last_updated": str(datetime.datetime.now(datetime.UTC))
+                    }
+                    
+                    # Create a dummy embedding vector for the metadata document (non-zero to satisfy Pinecone)
+                    dummy_embedding = [0.001] * self.model_info.dimension
+                    
+                    pinecone_index.upsert(vectors=[{
+                        "id": "__index_metadata__",
+                        "values": dummy_embedding,
+                        "metadata": index_metadata
+                    }])
+            except Exception as e:
+                print(f"*** Warning: Could not save index metadata: {e} ***")
             
             # Save processed files metadata
             save_processed_files(self.processed_files, self.processed_files_path)
