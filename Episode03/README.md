@@ -2,6 +2,39 @@
 
 A Python-based Retrieval-Augmented Generation (RAG) system that processes various media files (audio, video, text, PDFs) and web pages, enabling natural language querying of their content using OpenAI's GPT models and embedding technology.
 
+## Changes from Episode02
+
+### Web Page Processing
+- **New capability**: Process and index content from web pages via URL
+
+### Enhanced Vector Storage Options
+- **ChromaDB integration**: Added as third storage option
+
+### Additional Dependencies
+- `langchain-chroma` - ChromaDB vector database integration
+- `requests` - HTTP requests for web content fetching  
+- `beautifulsoup4` - HTML parsing and text extraction
+- `lxml` - XML/HTML parser backend
+- `tqdm` - Progress bars for operations
+- `chromadb` - ChromaDB database engine
+- `langchain_ollama` - Ollama LLM integration
+- `langchain_anthropic` - Anthropic Claude integration  
+- `sentence-transformers` - Local reranking models
+
+### Document Reranking
+- **HuggingFace rerankers**: Integrated reranking using cross-encoder models
+- **Popular models supported**: ms-marco-MiniLM, BGE reranker models
+
+### Additional Embedding Models
+- **Local embeddings**: Support for local embedding models via Ollama
+- **BGE-M3 embeddings**: High-quality multilingual embeddings locally
+- **Nomic embeddings**: Efficient local text embeddings
+- **Cost-free embeddings**: No API costs for local embedding models
+
+### New Scripts and Features
+- `analyze_chroma.py` - ChromaDB analysis and inspection tool
+- `rerank_core/` - Dedicated reranking module with HuggingFace integration
+
 ## What It Does
 
 This system:
@@ -16,83 +49,6 @@ This system:
   - Pinecone cloud vector database (optional, requires API key)
   - ChromaDB vector database (optional, local persistent storage with advanced features)
 
-## Prerequisites
-
-### 1. Setup Python Environment
-
-Create and activate a new Python 3 virtual environment:
-
-```bash
-python3 -m venv rag_env
-source rag_env/bin/activate
-```
-
-### 2. Upgrade pip (Optional but recommended)
-
-```bash
-pip install --upgrade pip
-```
-
-### 3. Install Required Packages
-
-```bash
-pip install -r requirements.txt
-```
-
-This will install all the necessary dependencies:
-- `python-dotenv` - Environment variable management
-- `openai-whisper` - Audio transcription using OpenAI Whisper models
-- `openai` - OpenAI API client for GPT models and embeddings
-- `langchain` - Core LangChain framework for LLM applications
-- `langchain-openai` - OpenAI integrations for LangChain (embeddings, chat models)
-- `langchain-community` - Community integrations and vector stores for LangChain
-- `langchain-pinecone` - Pinecone vector database integration for LangChain
-- `langchain-chroma` - ChromaDB vector database integration for LangChain
-- `pypdf` - PDF text extraction and processing
-- `docarray` - Document array operations for vector storage
-- `faiss-cpu` - Facebook AI Similarity Search for local vector storage
-- `requests` - HTTP requests for web scraping and API calls
-- `beautifulsoup4` - HTML parsing and content extraction from web pages
-- `lxml` - XML/HTML parser backend for BeautifulSoup
-- `tqdm` - Progress bars for long-running operations
-- `chromadb` - ChromaDB vector database engine
-
-
-## Environment Setup
-
-Create a `.env` file in your project directory with the following variables:
-
-### Required Variables
-
-```env
-OPENAI_API_KEY=your_openai_api_key_here
-TRANSCRIPT_DIR=/path/to/transcript/directory
-```
-
-### Optional Variables (for Pinecone integration)
-
-```env
-PINECONE_API_KEY=your_pinecone_api_key_here
-PINECONE_INDEX=your_index_name
-```
-
-### Optional Variables (for ChromaDB integration)
-
-```env
-CHROMA_PATH=/path/to/chroma/database
-CHROMA_INDEX=your_collection_name
-```
-
-**Note**: If neither Pinecone nor ChromaDB credentials are provided, the system will automatically use FAISS local storage.
-
-### Environment Variable Details
-
-- **`OPENAI_API_KEY`**: Your OpenAI API key for GPT and embedding models
-- **`TRANSCRIPT_DIR`**: Directory where transcript files will be stored/cached
-- **`PINECONE_API_KEY`** *(Optional)*: Your Pinecone API key for cloud vector storage
-- **`PINECONE_INDEX`** *(Optional)*: Name of your Pinecone index
-- **`CHROMA_PATH`** *(Optional)*: Directory path for ChromaDB database (defaults to './chroma_db')
-- **`CHROMA_INDEX`** *(Optional)*: ChromaDB collection name (defaults to 'default_index')
 
 ## Usage
 
@@ -149,39 +105,8 @@ python3 rag.py ./files
 *** Transcribing audio: files/Uber.mp3 ***
 *** Transcribed in 202.18 seconds; 80459 characters
 *** Split transcript into 134 documents ***
-
-*** Answer using in-memory vector store: ***
-A recurrent neural network (RNN) is a type of neural network that is designed to recognize patterns in sequences of data, such as text or speech.
 ```
 
-
-```bash
-# Running the script again will avoid the time consuming extraction of the text
-# from audio files, and use the cached transcript in TRANSCRIPT_DIR
-
-python3 rag.py ./files what is a transformer 
-
-*** No Pinecone configuration - using FAISS vector store ***
-
-*** Processing file: NIPS-2017-attention-is-all-you-need-Paper.pdf ***
-*** Transcript file: ./transcripts/NIPS-2017-attention-is-all-you-need-Paper.txt ***
-*** Skipping extraction/transcription; text file already exists ***
-*** Split transcript into 55 documents ***
-
-*** Processing file: Adams.txt ***
-*** Transcript file: ./transcripts/Adams.txt ***
-*** Skipping extraction/transcription; text file already exists ***
-*** Split transcript into 143 documents ***
-
-*** Processing file: Uber.mp3 ***
-*** Transcript file: ./transcripts/Uber.txt ***
-*** Skipping extraction/transcription; text file already exists ***
-*** Split transcript into 134 documents ***
-
-*** Answer using FAISS vector store: ***
-A transformer is a model architecture that relies entirely on an attention mechanism to draw global dependencies between input and output, eschewing recurrence typically used in traditional sequence transduction models.
-
-```
 
 #### Processing with ChromaDB
 
@@ -215,26 +140,11 @@ The attention mechanism allows the model to focus on different parts of the inpu
 - **`MediaDirectory`**: Path to directory containing your media files (supports .mp3, .wav, .txt, .pdf, video files)
 - **`URL`**: Web page URL to process and add to knowledge base
 - **`--store`**: Storage backend (faiss, pinecone, chroma)
+- **`--model`**: Embedding model (ada002, 3-small, 3-large, bge-m3, nomic-embed-text)
 - **`--chroma-path`**: Override ChromaDB database path
 - **`--chroma-index`**: Override ChromaDB collection name
 - **`--chunk-size`**: Text chunk size (default: 1000)
 - **`--chunk-overlap`**: Text chunk overlap (default: 400)
-
-## How It Works
-
-1. **File Processing**: The system scans the specified directory for supported media files
-2. **Content Extraction**:
-   - Audio files (.mp3, .wav): Transcribed using OpenAI Whisper
-   - PDF files: Text extracted using PyPDF
-   - Text files: Content read directly
-3. **Transcript Caching**: All extracted/transcribed content is saved to the transcript directory to avoid reprocessing
-4. **Text Chunking**: Content is split into overlapping chunks for optimal retrieval
-5. **Embedding Generation**: Each chunk is converted to vector embeddings using OpenAI's embedding model
-6. **Vector Storage**: Embeddings stored in either:
-   - DocArrayInMemorySearch (default)
-   - Pinecone cloud database (if credentials are provided)
-7. **Query Processing**: Your question is embedded and matched against stored content
-8. **Answer Generation**: Relevant chunks are retrieved and used as context for GPT to generate an answer
 
 ## Storage Options
 
@@ -275,7 +185,7 @@ The `rag.py` script handles content extraction and embedding creation, while `as
 
 **Note**: Web page content is cached to the transcript directory just like media files, so re-running the same URL will use the cached content unless manually deleted.
 
-## ChromaDB Advanced Usage
+## ChromaDB Usage
 
 ChromaDB offers additional features beyond basic storage:
 
@@ -308,6 +218,97 @@ export CHROMA_INDEX=research_papers
 python3 ask.py --store chroma "Explain neural networks"
 ```
 
+## Local Embedding Model Support
+
+Episode03 introduces support for local embedding models via Ollama, eliminating API costs and improving privacy for the embedding generation phase.
+
+### Local Embedding Models
+
+#### Available Models
+- **`bge-m3`**: High-quality multilingual embeddings (1024 dimensions)
+- **`nomic-embed-text`**: Efficient English text embeddings (768 dimensions)
+
+#### Setup Requirements
+
+1. **Install Ollama**: Download from [ollama.ai](https://ollama.ai)
+
+2. **Pull embedding models**:
+```bash
+# For BGE-M3 (multilingual, high quality)
+ollama pull bge-m3
+
+# For Nomic (English, efficient)  
+ollama pull nomic-embed-text
+```
+
+#### Usage Examples
+
+```bash
+# Use BGE-M3 local embeddings
+python3 rag.py --model bge-m3 --store faiss ./documents/
+
+*** Using local BGE-M3 embeddings via Ollama ***
+*** Processing with local model - no API costs ***
+
+# Use Nomic embeddings for English content
+python3 rag.py --model nomic-embed-text --store chroma ./english_docs/
+
+*** Using local Nomic embeddings via Ollama ***
+*** Processing file: report.pdf ***
+```
+
+#### Embedding Model Comparison
+
+| Model | Type | Dimensions | Languages | Use Case |
+|-------|------|------------|-----------|----------|
+| 3-small | OpenAI API | 1536 | Multi | Cost-efficient API option |
+| 3-large | OpenAI API | 3072 | Multi | Highest quality API option |
+| bge-m3 | Local/Ollama | 1024 | Multi | Local multilingual, free |
+| nomic-embed-text | Local/Ollama | 768 | English | Local English, efficient |
+
+**Note**: While embedding generation can be done locally, answer generation currently still uses OpenAI's GPT models and requires an API key.
+
+## Document Reranking
+
+Reranking can improve search accuracy by reordering initial retrieval results using more sophisticated models. Note that in some cases, reranking can reduce accuracy (so test with different reranker models and configurations)
+
+### Available Reranker Models
+
+The `rerank_core` module provides HuggingFace-based reranking:
+
+#### Model Presets
+- **`fast`**: `cross-encoder/ms-marco-MiniLM-L-6-v2` - Quick reranking
+- **`balanced`**: `cross-encoder/ms-marco-MiniLM-L-12-v2` - Good speed/quality balance  
+- **`quality`**: `BAAI/bge-reranker-base` - High quality, supports Chinese/English
+- **`best`**: `BAAI/bge-reranker-large` - Highest quality but slower
+
+### Reranking Usage
+
+```python
+# Example usage in custom scripts
+from rerank_core.reranker import HuggingFaceReranker
+
+# Initialize reranker
+reranker = HuggingFaceReranker(model_name="quality")
+
+# Rerank search results  
+results = reranker.rerank_simple(
+    query="machine learning algorithms",
+    docs_with_scores=initial_search_results,
+    top_k=5
+)
+```
+
+### Testing Reranker
+
+```python
+from rerank_core.reranker import test_reranker
+
+# Test if reranker works
+if test_reranker("fast"):
+    print("Reranker is working correctly")
+```
+
 ## Output
 
 The system provides a single response using your configured storage backend:
@@ -329,27 +330,8 @@ If no specific storage is configured, FAISS is used as the default.
 
 ## Performance Notes
 
-- **First run**: Audio transcription may take time depending on file size
+- **First run**: Audio and video transcription may take time depending on file size
 - **Subsequent runs**: Cached transcripts are reused for faster processing
-- **Whisper model**: Uses 'base' model for balance of speed and accuracy
-- **Chunk overlap**: 400 characters overlap ensures context preservation
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Missing API keys**: Ensure `OPENAI_API_KEY` is set in your `.env` file
-2. **Transcript directory**: Make sure the `TRANSCRIPT_DIR` exists and is writable
-3. **Audio processing**: First-time audio transcription requires internet connection for Whisper model download
-4. **Pinecone errors**: If Pinecone fails, the system will fall back to in-memory storage
-
-### Error Messages
-
-- `"Error: OPENAI_API_KEY and TRANSCRIPT_DIR must be set"`: Check your `.env` file
-- `"Skipping Pinecone-based response (missing PINECONE_API_KEY)"`: Normal when Pinecone is not configured
-- `"Error: Chroma dependencies not installed"`: Install ChromaDB with `pip install langchain-chroma chromadb`
-- `"Error: Chroma database not found"`: ChromaDB collection doesn't exist, run `rag.py --store chroma` first
-- `"Index did not become available within 10 seconds"`: Pinecone index creation timeout (usually resolves on retry)
 
 ## License
 
