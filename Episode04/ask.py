@@ -173,6 +173,24 @@ if args.store == "faiss":
     if not os.path.exists(FAISS_INDEX_PATH):
         print(f"Error: FAISS index not found at '{FAISS_INDEX_PATH}'. Run rag.py first to create the index.")
         sys.exit(1)
+    
+    # Try to read embedding model from metadata if not specified
+    if args.embedding_model == "text-embedding-3-small":  # Default value, user didn't specify
+        metadata_file = os.path.join(FAISS_INDEX_PATH, "index_metadata.json")
+        if os.path.exists(metadata_file):
+            try:
+                import json
+                with open(metadata_file, 'r') as f:
+                    metadata = json.load(f)
+                    stored_embedding_model = metadata.get('embedding_model')
+                    if stored_embedding_model:
+                        args.embedding_model = stored_embedding_model
+                        if args.verbose:
+                            print(f"*** Auto-detected embedding model from metadata: {stored_embedding_model} ***")
+            except Exception as e:
+                if args.verbose:
+                    print(f"*** Could not read metadata file: {e}, using default embedding model ***")
+    
     if args.verbose:
         print(f"*** Using local FAISS vector store: {FAISS_INDEX_PATH} ***")
 elif args.store == "pinecone":
