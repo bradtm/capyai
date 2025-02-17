@@ -21,3 +21,6 @@ accelerate
 mlx 
 mlx-lm
 sentencepiece
+pandas
+matplotlib
+seaborn
