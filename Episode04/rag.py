@@ -654,10 +654,86 @@ class UniversalRAGProcessor:
     def _process_directory(self, directory):
         """Process all supported files in a directory"""
         print(f"*** Processing directory: {directory} ***")
+        
+        # Get list of files first to show progress
+        files = []
         for filename in os.listdir(directory):
             filepath = os.path.join(directory, filename)
             if os.path.isfile(filepath):
-                self._process_file(filepath)
+                files.append(filepath)
+        
+        # Process files with progress bar
+        if files:
+            with tqdm(files, desc="Processing files") as pbar:
+                for filepath in pbar:
+                    pbar.set_postfix_str(f"File: {os.path.basename(filepath)}")
+                    self._process_file(filepath)
+        else:
+            print("*** No files found in directory ***")
+    
+    def _create_faiss_with_progress(self, texts, metadatas, ids, is_new_index=True, batch_size=100):
+        """Create FAISS vectorstore with progress tracking"""
+        import numpy as np
+        from langchain_community.docstore.in_memory import InMemoryDocstore
+        from langchain_core.documents import Document
+        
+        total_texts = len(texts)
+        print(f"Generating embeddings for {total_texts} documents (batch size: {batch_size})...")
+        
+        # Create embeddings in batches with progress bar
+        all_embeddings = []
+        with tqdm(total=total_texts, desc="Creating embeddings", unit="docs") as pbar:
+            for i in range(0, total_texts, batch_size):
+                batch_texts = texts[i:i + batch_size]
+                try:
+                    # Generate embeddings for this batch
+                    batch_embeddings = self.embeddings.embed_documents(batch_texts)
+                    all_embeddings.extend(batch_embeddings)
+                    pbar.update(len(batch_texts))
+                    
+                    # Show some progress info
+                    if i + batch_size < total_texts:
+                        pbar.set_postfix_str(f"Batch {i//batch_size + 1}/{(total_texts + batch_size - 1)//batch_size}")
+                    
+                except Exception as e:
+                    print(f"\nError generating embeddings for batch starting at {i}: {e}")
+                    # Continue with remaining batches
+                    continue
+        
+        if not all_embeddings:
+            raise ValueError("Failed to generate any embeddings")
+        
+        print(f"\u2713 Generated {len(all_embeddings)} embeddings, building FAISS index...")
+        
+        # Convert to numpy array
+        embedding_matrix = np.array(all_embeddings, dtype=np.float32)
+        
+        # Create FAISS index
+        import faiss
+        dimension = embedding_matrix.shape[1]
+        index = faiss.IndexFlatL2(dimension)
+        index.add(embedding_matrix)
+        
+        # Create docstore
+        documents = [Document(page_content=text, metadata=metadata) 
+                    for text, metadata in zip(texts, metadatas)]
+        docstore = InMemoryDocstore({id_: doc for id_, doc in zip(ids, documents)})
+        
+        # Create index to docstore mapping
+        index_to_docstore_id = {i: ids[i] for i in range(len(ids))}
+        
+        # Create FAISS vectorstore
+        vectorstore = FAISS(
+            embedding_function=self.embeddings,
+            index=index,
+            docstore=docstore,
+            index_to_docstore_id=index_to_docstore_id
+        )
+        
+        if is_new_index:
+            self.vectorstore = vectorstore
+        
+        return vectorstore
     
     def save_to_vector_store(self):
         """Save processed documents to the vector store"""
@@ -689,12 +765,18 @@ class UniversalRAGProcessor:
         if self.vectorstore is None:
             # Create new FAISS index
             print(f"*** Creating new FAISS index ***")
-            self.vectorstore = FAISS.from_texts(
-                texts=[doc["page_content"] for doc in docs_with_ids],
-                embedding=self.embeddings,
-                metadatas=[doc["metadata"] for doc in docs_with_ids],
-                ids=[doc["id"] for doc in docs_with_ids]
-            )
+            
+            # Extract data
+            texts = [doc["page_content"] for doc in docs_with_ids]
+            metadatas = [doc["metadata"] for doc in docs_with_ids]
+            ids = [doc["id"] for doc in docs_with_ids]
+            
+            print(f"Creating FAISS index with {len(texts)} documents...")
+            
+            # Create embeddings manually with progress tracking
+            self._create_faiss_with_progress(texts, metadatas, ids)
+            
+            print("✓ FAISS index creation completed")
         else:
             # Check for existing documents and filter out duplicates
             print(f"*** Checking for existing documents in FAISS index ***")
@@ -717,13 +799,20 @@ class UniversalRAGProcessor:
                 # Add new documents to existing index
                 print(f"*** Adding {len(docs_to_add)} new documents to existing FAISS index ***")
                 print(f"*** Index had {self.vectorstore.index.ntotal} documents before merge ***")
-                new_vectorstore = FAISS.from_texts(
-                    texts=[doc["page_content"] for doc in docs_to_add],
-                    embedding=self.embeddings,
-                    metadatas=[doc["metadata"] for doc in docs_to_add],
-                    ids=[doc["id"] for doc in docs_to_add]
-                )
+                
+                # Prepare new documents
+                texts = [doc["page_content"] for doc in docs_to_add]
+                metadatas = [doc["metadata"] for doc in docs_to_add]
+                ids = [doc["id"] for doc in docs_to_add]
+                
+                print(f"Creating embeddings for {len(texts)} new documents...")
+                
+                # Create new vectorstore with progress tracking
+                new_vectorstore = self._create_faiss_with_progress(texts, metadatas, ids, is_new_index=False)
+                
+                print("✓ Embeddings generated, merging with existing index...")
                 self.vectorstore.merge_from(new_vectorstore)
+                print("✓ Index merge completed")
             
             if skipped_count > 0:
                 print(f"*** Skipped {skipped_count} existing documents ***")
