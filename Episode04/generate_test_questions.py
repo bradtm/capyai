@@ -23,16 +23,19 @@ Usage:
   python text_question_generator.py --store chroma --chroma-path ./my_chroma --provider openai
   
   # Using Ollama with custom settings
-  python text_question_generator.py --store faiss --provider ollama --model llama3.2 --questions-per-chunk 2
+  python text_question_generator.py --store faiss --provider ollama --model llama3.2 --questions-per-chunk 1
   
   # Using HuggingFace models
   python text_question_generator.py --store faiss --provider huggingface --model microsoft/DialoGPT-medium
   
   # Limit total questions and chunks
-  python text_question_generator.py --store faiss --provider openai --total-questions 50 --max-chunks 20
+  python text_question_generator.py --store faiss --provider openai --total-questions 50
   
   # Limit questions per source file (randomly selects 5 chunks from each file)
   python text_question_generator.py --store faiss --provider openai --questions-per-file 5
+  
+  # Random document selection (select 100 random documents, 1 question each)
+  python text_question_generator.py --store faiss --provider openai --random-docs 100
 """
 
 import os
@@ -254,8 +257,7 @@ class HuggingFaceProvider(LLMProvider):
 class QuestionGenerator:
     """Framework for generating test questions from text chunks using various LLMs."""
     
-    def __init__(self, chunk_size: int = 3000, chunk_overlap: int = 800, 
-                 provider: str = "ollama", model: str = "llama3.2", api_key: str = None,
+    def __init__(self, provider: str = "ollama", model: str = "llama3.2", api_key: str = None,
                  ollama_url: str = "http://localhost:11434", device: str = "auto",
                  use_enhanced_targeting: bool = False, central_content_focus: bool = False,
                  generation_temperature: float = 0.7, max_total_questions: int = None):
@@ -263,8 +265,6 @@ class QuestionGenerator:
         Initialize the question generator.
         
         Args:
-            chunk_size: Size of text chunks in characters
-            chunk_overlap: Overlap between adjacent chunks
             provider: LLM provider ("openai", "ollama", "huggingface")
             model: Model name for the provider
             api_key: API key for OpenAI (if using OpenAI)
@@ -275,18 +275,12 @@ class QuestionGenerator:
             generation_temperature: Temperature for LLM generation
             max_total_questions: Maximum total questions to generate
         """
-        self.chunk_size = chunk_size
-        self.chunk_overlap = chunk_overlap
         self.use_enhanced_targeting = use_enhanced_targeting
         self.central_content_focus = central_content_focus
         self.generation_temperature = generation_temperature
         self.max_total_questions = max_total_questions
         
-        # Initialize text splitter
-        self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap
-        )
+        # Note: Text splitter not needed when working with existing vector stores
         
         # Initialize LLM provider
         if provider == "openai":
@@ -415,12 +409,12 @@ class QuestionGenerator:
         else:
             raise ValueError(f"Unsupported store type: {store_type}")
     
-    def get_all_chunks_from_vectorstore(self, max_chunks: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_all_chunks_from_vectorstore(self) -> List[Dict[str, Any]]:
         """
         Get all chunks from the loaded vector store.
         
         Args:
-            max_chunks: Maximum number of chunks to retrieve
+            None
             
         Returns:
             List of chunk dictionaries with text and metadata
@@ -433,7 +427,7 @@ class QuestionGenerator:
         if hasattr(self.vectorstore, 'index') and hasattr(self.vectorstore.index, 'ntotal'):
             # FAISS - get all documents by accessing the docstore directly
             total_docs = self.vectorstore.index.ntotal
-            limit = min(max_chunks, total_docs) if max_chunks else total_docs
+            limit = total_docs
             
             docs = []
             # Get documents directly from docstore
@@ -449,7 +443,7 @@ class QuestionGenerator:
         elif hasattr(self.vectorstore, '_collection'):
             # Chroma - get all documents
             collection = self.vectorstore._collection
-            limit = max_chunks if max_chunks else collection.count()
+            limit = collection.count()
             
             results = collection.get(limit=limit, include=['documents', 'metadatas'])
             docs = []
@@ -460,13 +454,11 @@ class QuestionGenerator:
                 
         else:
             # Pinecone or other stores - use a broad search
-            limit = max_chunks if max_chunks else 1000  # Default limit for Pinecone
+            limit = 1000  # Default limit for Pinecone
             docs = self.vectorstore.similarity_search("", k=limit)
         
         # Convert to our chunk format
         for i, doc in enumerate(docs):
-            if max_chunks and len(chunks) >= max_chunks:
-                break
                 
             chunk_id = doc.metadata.get('doc_id', f'chunk_{i}')
             source = doc.metadata.get('source', 'unknown')
@@ -1261,6 +1253,71 @@ class QuestionGenerator:
         
         self.test_questions = all_questions
         return all_questions
+    
+    def generate_questions_random_docs(self, num_docs: int) -> List[Dict[str, Any]]:
+        """Generate questions by randomly selecting documents and chunks.
+        
+        Args:
+            num_docs: Number of random documents to select
+            
+        Returns:
+            List of generated questions
+        """
+        print(f"\nGenerating questions from {num_docs} randomly selected documents...")
+        
+        # Get all chunks grouped by source file
+        all_chunks = self.get_all_chunks_from_vectorstore()
+        
+        # Group chunks by source file
+        chunks_by_file = {}
+        for chunk in all_chunks:
+            source_path = chunk.get('source_path') or chunk.get('source', 'unknown')
+            file_key = os.path.basename(source_path) if source_path != 'unknown' else 'unknown'
+            
+            if file_key not in chunks_by_file:
+                chunks_by_file[file_key] = []
+            chunks_by_file[file_key].append(chunk)
+        
+        available_files = list(chunks_by_file.keys())
+        print(f"Found {len(available_files)} unique source documents")
+        
+        if len(available_files) < num_docs:
+            print(f"Warning: Requested {num_docs} documents but only {len(available_files)} available")
+            num_docs = len(available_files)
+        
+        # Randomly select documents
+        selected_files = random.sample(available_files, num_docs)
+        print(f"Randomly selected {len(selected_files)} documents")
+        
+        all_questions = []
+        
+        for i, file_key in enumerate(selected_files):
+            file_chunks = chunks_by_file[file_key]
+            
+            # Randomly select one chunk from this file
+            selected_chunk = random.choice(file_chunks)
+            
+            print(f"\nProcessing document {i+1}/{len(selected_files)}: {file_key}")
+            print(f"  Selected 1 random chunk from {len(file_chunks)} available chunks")
+            
+            # Generate 1 question from this chunk
+            try:
+                chunk_questions = self.generate_questions_for_chunk(selected_chunk, num_questions=1)
+                
+                # Add file information
+                for question in chunk_questions:
+                    question['file'] = file_key
+                
+                all_questions.extend(chunk_questions)
+                print(f"  Generated {len(chunk_questions)} question(s)")
+                
+            except Exception as e:
+                print(f"  Error generating questions: {e}")
+                continue
+        
+        print(f"\nTotal questions generated: {len(all_questions)}")
+        self.test_questions = all_questions
+        return all_questions
 
 
 def main():
@@ -1280,11 +1337,6 @@ def main():
     parser.add_argument('--output', '-o', default='test_questions.json', 
                         help='Output JSON file for generated questions')
     
-    # Chunking options
-    parser.add_argument('--chunk-size', type=int, default=3000, 
-                        help='Size of text chunks in characters')
-    parser.add_argument('--chunk-overlap', type=int, default=800, 
-                        help='Overlap between adjacent chunks')
     
     # LLM provider options
     parser.add_argument('--provider', choices=['openai', 'ollama', 'huggingface'], default='ollama',
@@ -1299,14 +1351,14 @@ def main():
                         help='Device for HuggingFace models')
     
     # Generation options
-    parser.add_argument('--questions-per-chunk', type=int, default=3, 
-                        help='Number of questions to generate per chunk (default: 3)')
+    parser.add_argument('--questions-per-chunk', type=int, default=1, 
+                        help='Number of questions to generate per chunk (default: 1)')
     parser.add_argument('--questions-per-file', type=int, default=None, 
                         help='Maximum number of questions per source file (randomly selects chunks)')
-    parser.add_argument('--max-chunks', type=int, default=None, 
-                        help='Maximum number of chunks to process (default: all)')
     parser.add_argument('--total-questions', type=int, default=None, 
                         help='Maximum total questions to generate')
+    parser.add_argument('--random-docs', type=int, default=None,
+                        help='Randomly select N documents and generate 1 question from 1 random chunk per document')
     parser.add_argument('--temperature', type=float, default=0.7, 
                         help='Temperature for LLM generation (lower = more specific)')
     
@@ -1348,8 +1400,6 @@ def main():
     # Initialize the question generator
     try:
         generator = QuestionGenerator(
-            chunk_size=args.chunk_size,
-            chunk_overlap=args.chunk_overlap,
             provider=args.provider,
             model=args.model,
             api_key=args.api_key,
@@ -1385,21 +1435,27 @@ def main():
         sys.exit(1)
     
     # Get chunks from vector store
-    try:
-        print("Retrieving chunks from vector store...")
-        chunks = generator.get_all_chunks_from_vectorstore(max_chunks=args.max_chunks)
-        print(f"Retrieved {len(chunks)} chunks from vector store")
-    except Exception as e:
-        print(f"Error retrieving chunks: {e}")
-        sys.exit(1)
-    
-    # Generate questions from chunks
-    questions = generator.generate_questions_from_chunks(
-        chunks=chunks,
-        questions_per_chunk=args.questions_per_chunk,
-        questions_per_file=args.questions_per_file,
-        verbose=not args.quiet
-    )
+    # Generate questions using the appropriate method
+    if args.random_docs:
+        # Use random document selection method
+        questions = generator.generate_questions_random_docs(num_docs=args.random_docs)
+    else:
+        # Use traditional chunk-based method
+        try:
+            print("Retrieving chunks from vector store...")
+            chunks = generator.get_all_chunks_from_vectorstore()
+            print(f"Retrieved {len(chunks)} chunks from vector store")
+        except Exception as e:
+            print(f"Error retrieving chunks: {e}")
+            sys.exit(1)
+        
+        # Generate questions from chunks
+        questions = generator.generate_questions_from_chunks(
+            chunks=chunks,
+            questions_per_chunk=args.questions_per_chunk,
+            questions_per_file=args.questions_per_file,
+            verbose=not args.quiet
+        )
     
     # Save the generated questions
     generator.save_questions(args.output)
