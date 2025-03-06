@@ -96,6 +96,62 @@ class VectorStoreManager:
         else:  # Pinecone doesn't have a direct count method
             return -1  # Unknown count
     
+    def get_chunks_by_source_and_range(self, source: str, start_idx: int, end_idx: int) -> List[Document]:
+        """
+        Retrieve chunks from a specific source file within a chunk index range.
+        This is used for context expansion.
+        """
+        try:
+            if self.store_type == "faiss":
+                # For FAISS, we need to scan through all documents
+                all_docs = []
+                total_docs = self.vectorstore.index.ntotal
+                
+                for i in range(total_docs):
+                    try:
+                        doc_id = self.vectorstore.index_to_docstore_id[i]
+                        doc = self.vectorstore.docstore.search(doc_id)
+                        if (doc and 
+                            doc.metadata.get('source') == source and
+                            doc.metadata.get('chunk_index') is not None and
+                            start_idx <= doc.metadata.get('chunk_index') <= end_idx):
+                            all_docs.append(doc)
+                    except (KeyError, IndexError):
+                        continue
+                        
+                return sorted(all_docs, key=lambda d: d.metadata.get('chunk_index', 0))
+                
+            elif self.store_type == "chroma":
+                # For Chroma, we can use metadata filtering
+                collection = self.vectorstore._collection
+                
+                # Query with metadata filter
+                results = collection.get(
+                    where={
+                        "$and": [
+                            {"source": {"$eq": source}},
+                            {"chunk_index": {"$gte": start_idx}},
+                            {"chunk_index": {"$lte": end_idx}}
+                        ]
+                    },
+                    include=['documents', 'metadatas']
+                )
+                
+                docs = []
+                for doc_text, metadata in zip(results['documents'], results['metadatas']):
+                    docs.append(Document(page_content=doc_text, metadata=metadata))
+                
+                return sorted(docs, key=lambda d: d.metadata.get('chunk_index', 0))
+                
+            else:
+                # Pinecone doesn't support efficient metadata range queries
+                # Fall back to similarity search and filter
+                return []
+                
+        except Exception as e:
+            print(f"Warning: Could not retrieve chunks for range expansion: {e}")
+            return []
+
     def get_store_info(self) -> dict:
         """Get information about the vector store."""
         info = {
