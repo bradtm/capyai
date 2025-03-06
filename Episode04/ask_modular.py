@@ -87,7 +87,7 @@ Examples:
     
     # Model arguments
     parser.add_argument("--embedding-model", choices=["text-embedding-3-small", "text-embedding-3-large", "text-embedding-ada-002", "bge-m3", "nomic-embed-text"], 
-                       default="text-embedding-3-small", help="Embedding model to use (default: text-embedding-3-small)")
+                       default="text-embedding-3-small", help="Embedding model to use (default: text-embedding-3-small, auto-detected from vector store if available)")
     parser.add_argument("--llm-type", choices=["openai", "huggingface", "ollama"], default="openai",
                        help="Type of LLM to use (default: openai)")
     parser.add_argument("--llm-model", default="gpt-3.5",
@@ -95,9 +95,14 @@ Examples:
     parser.add_argument("--device", choices=["auto", "cpu", "mps", "cuda"], default="auto",
                        help="Device for HuggingFace models (default: auto)")
     
+    # Document handling arguments
+    parser.add_argument("--expand-context", type=int, default=2, help="Number of chunks to expand before/after each match for context (default: 2)")
+    parser.add_argument("--use-chunks-only", action="store_true", help="Use individual chunks only without context expansion")
+    
     # Output arguments
     parser.add_argument("--preview-bytes", type=int, default=0, help="Number of bytes to show from each document in references (default: 0, no content)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
+    parser.add_argument("-vv", "--extra-verbose", action="store_true", help="Extra verbose output showing detailed processing steps (implies -v)")
     
     return parser
 
@@ -131,11 +136,9 @@ def main():
     if args.rerank_top_k is None:
         args.rerank_top_k = args.top_k
     
-    if args.verbose:
-        print(f"*** Using {args.llm_type} LLM: {args.llm_model}")
-        print(f"*** Using embedding model: {args.embedding_model}")
-        if args.rerank:
-            print(f"*** Reranking enabled with {args.rerank_type} model: {args.rerank_model}")
+    # Set verbose if extra-verbose is enabled
+    if args.extra_verbose:
+        args.verbose = True
     
     try:
         # Get store configuration
@@ -150,8 +153,18 @@ def main():
             enable_reranking=args.rerank,
             reranker_type=args.rerank_type,
             reranker_model=args.rerank_model,
+            expand_context=args.expand_context,
+            use_chunks_only=args.use_chunks_only,
             **store_config
         )
+        
+        if args.verbose:
+            print(f"*** Using {args.llm_type} LLM: {args.llm_model}")
+            print(f"*** Using embedding model: {qa_system.embedding_model}")
+            if args.rerank:
+                print(f"*** Reranking enabled with {args.rerank_type} model: {args.rerank_model}")
+            if not args.use_chunks_only and args.expand_context > 0:
+                print(f"*** Context expansion enabled with window ±{args.expand_context} chunks")
         
         # Validate setup
         validation = qa_system.validate_setup()
@@ -170,6 +183,7 @@ def main():
             top_k=args.top_k,
             rerank_top_k=args.rerank_top_k if args.rerank else None,
             verbose=args.verbose,
+            extra_verbose=args.extra_verbose,
             show_rerank_results=args.show_rerank_results
         )
         
