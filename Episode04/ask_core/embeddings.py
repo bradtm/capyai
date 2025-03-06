@@ -52,7 +52,7 @@ def create_embeddings(model_name: str) -> Embeddings:
         return OpenAIEmbeddings(model=model_name)
 
 
-def get_embedding_model_from_metadata(store_type: str, store_path: str) -> str:
+def get_embedding_model_from_metadata(store_type: str, store_path: str, collection_name: str = None) -> str:
     """Try to detect embedding model from vector store metadata."""
     if store_type == "faiss":
         metadata_file = os.path.join(store_path, "index_metadata.json")
@@ -64,4 +64,28 @@ def get_embedding_model_from_metadata(store_type: str, store_path: str) -> str:
                     return metadata.get('embedding_model')
             except Exception:
                 pass
+    elif store_type == "chroma":
+        try:
+            import chromadb
+            client = chromadb.PersistentClient(path=store_path)
+            if collection_name:
+                collection = client.get_collection(collection_name)
+                metadata = collection.metadata or {}
+                embedding_model = metadata.get('embedding_model')
+                if embedding_model:
+                    return embedding_model
+            else:
+                # If no collection name specified, try to find collections with metadata
+                collections = client.list_collections()
+                for collection_info in collections:
+                    try:
+                        collection = client.get_collection(collection_info.name)
+                        metadata = collection.metadata or {}
+                        embedding_model = metadata.get('embedding_model')
+                        if embedding_model:
+                            return embedding_model
+                    except Exception:
+                        continue
+        except Exception:
+            pass
     return None
