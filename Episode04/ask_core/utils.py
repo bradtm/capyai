@@ -1,13 +1,186 @@
 """Utility functions and helpers for the ask_core system."""
 
 import os
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 from langchain_core.documents import Document
+from collections import defaultdict
 
 
 def format_documents(docs: List[Document]) -> str:
     """Format documents into a context string."""
     return "\n\n".join([doc.page_content for doc in docs])
+
+
+def expand_context_chunks(docs_with_scores: List[Tuple[Document, float]], 
+                         vectorstore, expand_window: int = 2) -> List[Tuple[Document, float]]:
+    """
+    Expand retrieved chunks with surrounding context and intelligently merge overlapping ranges.
+    
+    Args:
+        docs_with_scores: List of (Document, score) tuples from vector search
+        vectorstore: The vector store to retrieve additional chunks from
+        expand_window: Number of chunks to expand before/after each match
+        
+    Returns:
+        List of expanded and merged documents with their scores
+    """
+    if expand_window == 0:
+        return docs_with_scores
+    
+    # Group documents by source file and collect chunk information
+    docs_by_source = defaultdict(list)
+    
+    for doc, score in docs_with_scores:
+        source = doc.metadata.get('source', 'unknown')
+        chunk_index = doc.metadata.get('chunk_index')
+        total_chunks = doc.metadata.get('total_chunks')
+        
+        if chunk_index is not None and total_chunks is not None:
+            docs_by_source[source].append({
+                'doc': doc,
+                'score': score,
+                'chunk_index': chunk_index,
+                'total_chunks': total_chunks
+            })
+        else:
+            # If no chunk info, keep as-is
+            docs_by_source[source].append({
+                'doc': doc,
+                'score': score,
+                'chunk_index': None,
+                'total_chunks': None
+            })
+    
+    expanded_docs = []
+    
+    # Process each source file
+    for source, source_docs in docs_by_source.items():
+        # Separate docs with and without chunk info
+        chunked_docs = [d for d in source_docs if d['chunk_index'] is not None]
+        non_chunked_docs = [d for d in source_docs if d['chunk_index'] is None]
+        
+        # Add non-chunked docs as-is
+        for doc_info in non_chunked_docs:
+            expanded_docs.append((doc_info['doc'], doc_info['score']))
+        
+        if not chunked_docs:
+            continue
+            
+        # Sort chunked docs by chunk index
+        chunked_docs.sort(key=lambda x: x['chunk_index'])
+        
+        # Create expansion ranges and merge overlapping ones
+        ranges = []
+        for doc_info in chunked_docs:
+            chunk_idx = doc_info['chunk_index']
+            total_chunks = doc_info['total_chunks']
+            
+            # Calculate expansion range
+            start_idx = max(0, chunk_idx - expand_window)
+            end_idx = min(total_chunks - 1, chunk_idx + expand_window)
+            
+            ranges.append({
+                'start': start_idx,
+                'end': end_idx,
+                'original_doc': doc_info['doc'],
+                'score': doc_info['score'],
+                'chunk_index': chunk_idx
+            })
+        
+        # Merge overlapping ranges
+        merged_ranges = merge_overlapping_ranges(ranges)
+        
+        # Create expanded documents for each merged range
+        for range_info in merged_ranges:
+            try:
+                expanded_doc = create_expanded_document(
+                    vectorstore, source, range_info, chunked_docs[0]['total_chunks']
+                )
+                if expanded_doc:
+                    expanded_docs.append((expanded_doc, range_info['score']))
+            except Exception as e:
+                # If expansion fails, fall back to original document
+                print(f"Warning: Could not expand context for {source}: {e}")
+                expanded_docs.append((range_info['original_doc'], range_info['score']))
+    
+    return expanded_docs
+
+
+def merge_overlapping_ranges(ranges: List[Dict]) -> List[Dict]:
+    """
+    Merge overlapping chunk ranges intelligently.
+    
+    Example: If chunk #4 and #6 are retrieved with expand_window=2:
+    - Range 1: chunks #2-6 (4±2) 
+    - Range 2: chunks #4-8 (6±2)
+    - Merged: chunks #2-8 (one super-chunk)
+    """
+    if not ranges:
+        return ranges
+        
+    # Sort ranges by start index
+    sorted_ranges = sorted(ranges, key=lambda x: x['start'])
+    
+    merged = []
+    current_range = sorted_ranges[0].copy()
+    
+    for next_range in sorted_ranges[1:]:
+        # Check if ranges overlap or are adjacent
+        if next_range['start'] <= current_range['end'] + 1:
+            # Merge ranges
+            current_range['end'] = max(current_range['end'], next_range['end'])
+            # Keep the best score (assuming lower is better for distances, higher for similarities)
+            # We'll use the score from the first document in the range
+            if next_range['score'] < current_range['score']:  # Assuming distance scores
+                current_range['score'] = next_range['score']
+        else:
+            # No overlap, start a new range
+            merged.append(current_range)
+            current_range = next_range.copy()
+    
+    # Add the last range
+    merged.append(current_range)
+    
+    return merged
+
+
+def create_expanded_document(vectorstore, source: str, range_info: Dict, total_chunks: int) -> Optional[Document]:
+    """
+    Create an expanded document by retrieving and combining chunks in the specified range.
+    """
+    try:
+        start_idx = range_info['start']
+        end_idx = range_info['end']
+        original_doc = range_info['original_doc']
+        
+        # Retrieve chunks in the specified range
+        range_chunks = vectorstore.get_chunks_by_source_and_range(source, start_idx, end_idx)
+        
+        if not range_chunks:
+            # Fallback to original document if we can't retrieve the range
+            return original_doc
+        
+        # Combine the chunks into a single expanded document
+        combined_content = "\n\n".join([chunk.page_content for chunk in range_chunks])
+        
+        # Create metadata for the expanded document
+        expanded_metadata = original_doc.metadata.copy()
+        expanded_metadata['expanded_range'] = f"{start_idx}-{end_idx}"
+        expanded_metadata['expansion_window'] = end_idx - start_idx + 1
+        expanded_metadata['chunk_count'] = len(range_chunks)
+        
+        # Use the chunk index from the first chunk in the range
+        if range_chunks:
+            expanded_metadata['chunk_index'] = range_chunks[0].metadata.get('chunk_index', start_idx)
+        
+        return Document(
+            page_content=combined_content,
+            metadata=expanded_metadata
+        )
+        
+    except Exception as e:
+        print(f"Error creating expanded document: {e}")
+        return original_doc  # Fallback to original
 
 
 def display_results(query: str, docs_with_scores: List[Tuple[Document, float]], 
@@ -109,7 +282,8 @@ def get_store_config(args) -> dict:
     elif args.store == "chroma":
         return {
             "chroma_path": args.chroma_path,
-            "chroma_index": args.chroma_index
+            "chroma_index": args.chroma_index,
+            "collection_name": args.chroma_index  # Pass collection name for metadata detection
         }
     else:
         raise ValueError(f"Unsupported store type: {args.store}")
