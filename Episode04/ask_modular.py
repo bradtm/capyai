@@ -23,6 +23,13 @@ from ask_core.utils import (
 )
 from ask_core.rerankers import check_reranking_dependencies
 
+# Optional rich formatting imports
+try:
+    from cask_core.utils import VerboseConsole, display_results as rich_display_results
+    RICH_AVAILABLE = True
+except ImportError:
+    RICH_AVAILABLE = False
+
 
 def create_argument_parser():
     """Create and configure the argument parser."""
@@ -103,8 +110,77 @@ Examples:
     parser.add_argument("--preview-bytes", type=int, default=0, help="Number of bytes to show from each document in references (default: 0, no content)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
     parser.add_argument("-vv", "--extra-verbose", action="store_true", help="Extra verbose output showing detailed processing steps (implies -v)")
+    parser.add_argument("--rich", action="store_true", help="Enable rich console formatting similar to cask.py")
     
     return parser
+
+
+def _display_results_rich(console, query, docs_with_scores, answer, system_info, 
+                         preview_bytes=0, verbose=False, reranking_enabled=False):
+    """Display results using rich formatting similar to cask.py."""
+    from rich.panel import Panel
+    from rich.markdown import Markdown
+    
+    # Display the answer in a panel
+    answer_panel = Panel(
+        answer,
+        title=f"Answer from {system_info['store_info']['store_type']}",
+        title_align="left",
+        border_style="green"
+    )
+    console.print(answer_panel)
+    
+    # Display references
+    if docs_with_scores:
+        console.print(f"\n[bold]References:[/bold] {len(docs_with_scores)} documents")
+        
+        for i, (doc, score) in enumerate(docs_with_scores, 1):
+            doc_id = doc.metadata.get('doc_id', 'unknown')[:16] + '...'
+            source = doc.metadata.get('source', 'unknown')
+            
+            # Build source info with chunk information
+            chunk_index = doc.metadata.get('chunk_index')
+            total_chunks = doc.metadata.get('total_chunks')
+            if chunk_index is not None and total_chunks is not None:
+                source_info = f"from {source}, chunk {chunk_index + 1} of {total_chunks}"
+            else:
+                source_info = f"from {source}"
+            
+            # Format score display
+            if reranking_enabled and hasattr(doc, 'rerank_score'):
+                score_info = f"[rerank: {doc.rerank_score:.4f}]"
+            else:
+                score_info = f"[similarity: {score:.4f}]"
+            
+            console.print(f"  {i}. [cyan]{doc_id}[/cyan] ({source_info}) {score_info}")
+            
+            # Show content preview if requested
+            if preview_bytes > 0:
+                content_preview = doc.page_content[:preview_bytes]
+                if len(doc.page_content) > preview_bytes:
+                    content_preview += "..."
+                console.print(f"     [dim]{content_preview}[/dim]")
+                console.print()
+    
+    # Display system info if verbose
+    if verbose:
+        store_info = system_info["store_info"]
+        llm_info = system_info["llm_info"]
+        embedding_model = system_info["embedding_model"]
+        
+        system_panel = Panel(
+            f"Store Type: {store_info['store_type']}\n"
+            f"Store Path: {store_info.get('store_path', 'N/A')}\n"
+            f"Documents: {store_info.get('total_documents', 'N/A')}\n"
+            f"Embedding Model: {embedding_model}\n"
+            f"LLM Type: {llm_info['llm_type']}\n"
+            f"LLM Model: {llm_info.get('model', llm_info.get('llm_model', 'N/A'))}\n" +
+            (f"Reranker: {system_info.get('reranker_info', {}).get('reranker_type', 'N/A')}" if reranking_enabled else ""),
+            title="System Info",
+            title_align="left",
+            border_style="blue"
+        )
+        console.print(system_panel)
 
 
 def main():
@@ -139,6 +215,11 @@ def main():
     # Set verbose if extra-verbose is enabled
     if args.extra_verbose:
         args.verbose = True
+    
+    # Validate rich formatting availability
+    if args.rich and not RICH_AVAILABLE:
+        print("Error: Rich formatting requested but cask_core not available. Install cask_core or remove --rich flag.")
+        sys.exit(1)
     
     try:
         # Get store configuration
@@ -189,16 +270,32 @@ def main():
         
         # Display results
         system_info = qa_system.get_system_info()
-        display_results(
-            query=results["question"],
-            docs_with_scores=results["docs_with_scores"],
-            answer=results["answer"],
-            store_info=system_info["store_info"],
-            llm_info=system_info["llm_info"],
-            preview_bytes=args.preview_bytes,
-            verbose=args.verbose,
-            reranking_enabled=results["metadata"]["reranking_enabled"]
-        )
+        
+        if args.rich:
+            # Use rich formatting with VerboseConsole
+            console = VerboseConsole(is_verbose=args.verbose)
+            _display_results_rich(
+                console=console,
+                query=results["question"],
+                docs_with_scores=results["docs_with_scores"],
+                answer=results["answer"],
+                system_info=system_info,
+                preview_bytes=args.preview_bytes,
+                verbose=args.verbose,
+                reranking_enabled=results["metadata"]["reranking_enabled"]
+            )
+        else:
+            # Use standard formatting
+            display_results(
+                query=results["question"],
+                docs_with_scores=results["docs_with_scores"],
+                answer=results["answer"],
+                store_info=system_info["store_info"],
+                llm_info=system_info["llm_info"],
+                preview_bytes=args.preview_bytes,
+                verbose=args.verbose,
+                reranking_enabled=results["metadata"]["reranking_enabled"]
+            )
         
     except Exception as e:
         print(f"Error: {e}")
