@@ -8,6 +8,7 @@ for better organization and maintainability.
 
 import os
 import sys
+import json
 import argparse
 from dotenv import load_dotenv
 
@@ -111,6 +112,7 @@ Examples:
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
     parser.add_argument("-vv", "--extra-verbose", action="store_true", help="Extra verbose output showing detailed processing steps (implies -v)")
     parser.add_argument("--rich", action="store_true", help="Enable rich console formatting similar to cask.py")
+    parser.add_argument("--json", action="store_true", help="Output results in JSON format")
     
     return parser
 
@@ -183,6 +185,68 @@ def _display_results_rich(console, query, docs_with_scores, answer, system_info,
         console.print(system_panel)
 
 
+def _display_results_json(query, docs_with_scores, answer, system_info, 
+                         preview_bytes=0, verbose=False, reranking_enabled=False):
+    """Display results in JSON format similar to cask.py."""
+    
+    # Build references list
+    references = []
+    for i, (doc, score) in enumerate(docs_with_scores):
+        doc_id = doc.metadata.get('doc_id', 'unknown')
+        source = doc.metadata.get('source', 'unknown')
+        chunk_index = doc.metadata.get('chunk_index')
+        total_chunks = doc.metadata.get('total_chunks')
+        
+        ref = {
+            "rank": i + 1,
+            "doc_id": doc_id,
+            "source": source,
+            "similarity_score": float(score)
+        }
+        
+        if chunk_index is not None and total_chunks is not None:
+            ref["chunk_index"] = chunk_index + 1  # 1-based for display
+            ref["total_chunks"] = total_chunks
+        
+        if reranking_enabled and hasattr(doc, 'rerank_score'):
+            ref["rerank_score"] = float(doc.rerank_score)
+        
+        if preview_bytes > 0:
+            content_preview = doc.page_content[:preview_bytes]
+            if len(doc.page_content) > preview_bytes:
+                content_preview += "..."
+            ref["content_preview"] = content_preview
+            
+        references.append(ref)
+    
+    # Build the complete result
+    result = {
+        "query": query,
+        "answer": answer,
+        "references": references,
+        "metadata": {
+            "num_documents": len(docs_with_scores),
+            "reranking_enabled": reranking_enabled
+        }
+    }
+    
+    # Add system info if verbose
+    if verbose:
+        result["system_info"] = {
+            "store_type": system_info["store_info"]["store_type"],
+            "store_path": system_info["store_info"].get("store_path", "N/A"),
+            "total_documents": system_info["store_info"].get("total_documents", "N/A"),
+            "embedding_model": system_info["embedding_model"],
+            "llm_type": system_info["llm_info"]["llm_type"],
+            "llm_model": system_info["llm_info"].get("model", system_info["llm_info"].get("llm_model", "N/A"))
+        }
+        
+        if reranking_enabled and "reranker_info" in system_info:
+            result["system_info"]["reranker_type"] = system_info["reranker_info"].get("reranker_type", "N/A")
+    
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+
+
 def main():
     """Main entry point."""
     parser = create_argument_parser()
@@ -220,6 +284,20 @@ def main():
     if args.rich and not RICH_AVAILABLE:
         print("Error: Rich formatting requested but cask_core not available. Install cask_core or remove --rich flag.")
         sys.exit(1)
+    
+    # Validate output mode conflicts
+    if args.json and args.rich:
+        print("Error: Cannot use both --json and --rich flags simultaneously. Choose one output format.")
+        sys.exit(1)
+    
+    # Store original verbose settings for JSON output
+    original_verbose = args.verbose
+    original_extra_verbose = args.extra_verbose
+    
+    # JSON mode disables verbose printing during processing
+    if args.json:
+        args.verbose = False
+        args.extra_verbose = False
     
     try:
         # Get store configuration
@@ -271,7 +349,18 @@ def main():
         # Display results
         system_info = qa_system.get_system_info()
         
-        if args.rich:
+        if args.json:
+            # Use JSON formatting
+            _display_results_json(
+                query=results["question"],
+                docs_with_scores=results["docs_with_scores"],
+                answer=results["answer"],
+                system_info=system_info,
+                preview_bytes=args.preview_bytes,
+                verbose=original_verbose,  # Use original verbose setting
+                reranking_enabled=results["metadata"]["reranking_enabled"]
+            )
+        elif args.rich:
             # Use rich formatting with VerboseConsole
             console = VerboseConsole(is_verbose=args.verbose)
             _display_results_rich(
@@ -298,10 +387,21 @@ def main():
             )
         
     except Exception as e:
-        print(f"Error: {e}")
-        if args.verbose:
-            import traceback
-            traceback.print_exc()
+        if args.json:
+            # Output error in JSON format
+            error_result = {
+                "error": str(e),
+                "query": query if 'query' in locals() else args.query[0] if args.query else "unknown"
+            }
+            if original_verbose:
+                import traceback
+                error_result["traceback"] = traceback.format_exc()
+            print(json.dumps(error_result, indent=2))
+        else:
+            print(f"Error: {e}")
+            if args.verbose:
+                import traceback
+                traceback.print_exc()
         sys.exit(1)
 
 
