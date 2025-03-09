@@ -114,6 +114,11 @@ Examples:
     parser.add_argument("--rich", action="store_true", help="Enable rich console formatting similar to cask.py")
     parser.add_argument("--json", action="store_true", help="Output results in JSON format")
     
+    # Comparison arguments
+    parser.add_argument("--compare-models", help="Compare answers from multiple LLM models (comma-separated, e.g., 'gpt-4o,gpt-3.5-turbo')")
+    parser.add_argument("--compare-reranking", action="store_true", help="Compare results with and without reranking")
+    parser.add_argument("--compare-k", help="Compare different retrieval parameters (e.g., 'k=3,k=5,k=10' or 'k=5:kk=3,k=5:kk=5')")
+    
     return parser
 
 
@@ -247,6 +252,237 @@ def _display_results_json(query, docs_with_scores, answer, system_info,
     print(json.dumps(result, indent=2, ensure_ascii=False))
 
 
+def _run_comparison(args, query):
+    """Run comparison queries and display results."""
+    if args.compare_models:
+        return _compare_models(args, query)
+    elif args.compare_reranking:
+        return _compare_reranking(args, query)
+    elif args.compare_k:
+        return _compare_k_values(args, query)
+
+
+def _compare_models(args, query):
+    """Compare answers from different LLM models."""
+    models = [m.strip() for m in args.compare_models.split(',')]
+    
+    print(f"Comparing models: {', '.join(models)}")
+    print(f"Query: {query}\n")
+    
+    results = []
+    
+    for model in models:
+        print(f"Running query with {model}...")
+        
+        # Get store configuration
+        store_config = get_store_config(args)
+        
+        # Create QA system with this model
+        qa_system = QASystem(
+            store_type=args.store,
+            embedding_model=args.embedding_model,
+            llm_type=args.llm_type,
+            llm_model=model,
+            enable_reranking=args.rerank,
+            reranker_type=args.rerank_type,
+            reranker_model=args.rerank_model,
+            expand_context=args.expand_context,
+            use_chunks_only=args.use_chunks_only,
+            **store_config
+        )
+        
+        # Run query
+        result = qa_system.query(
+            question=query,
+            top_k=args.top_k,
+            rerank_top_k=args.rerank_top_k if args.rerank else None,
+            verbose=False,  # Suppress verbose output during comparison
+            extra_verbose=False,
+            show_rerank_results=False
+        )
+        
+        results.append({
+            'model': model,
+            'result': result,
+            'system_info': qa_system.get_system_info()
+        })
+    
+    _display_comparison_results(results, "Model Comparison", args.rich)
+    return True
+
+
+def _compare_reranking(args, query):
+    """Compare results with and without reranking."""
+    print("Comparing with and without reranking")
+    print(f"Query: {query}\n")
+    
+    results = []
+    configs = [
+        ('Without Reranking', False),
+        ('With Reranking', True)
+    ]
+    
+    for config_name, enable_rerank in configs:
+        print(f"Running query {config_name.lower()}...")
+        
+        store_config = get_store_config(args)
+        
+        qa_system = QASystem(
+            store_type=args.store,
+            embedding_model=args.embedding_model,
+            llm_type=args.llm_type,
+            llm_model=args.llm_model,
+            enable_reranking=enable_rerank,
+            reranker_type=args.rerank_type,
+            reranker_model=args.rerank_model,
+            expand_context=args.expand_context,
+            use_chunks_only=args.use_chunks_only,
+            **store_config
+        )
+        
+        result = qa_system.query(
+            question=query,
+            top_k=args.top_k,
+            rerank_top_k=args.rerank_top_k if enable_rerank else None,
+            verbose=False,
+            extra_verbose=False,
+            show_rerank_results=False
+        )
+        
+        results.append({
+            'model': config_name,
+            'result': result,
+            'system_info': qa_system.get_system_info()
+        })
+    
+    _display_comparison_results(results, "Reranking Comparison", args.rich)
+    return True
+
+
+def _compare_k_values(args, query):
+    """Compare different k and kk parameter values."""
+    # Parse k values like "k=3,k=5,k=10" or "k=5:kk=3,k=5:kk=5"
+    k_configs = []
+    for config in args.compare_k.split(','):
+        config = config.strip()
+        if ':' in config:
+            # Format: k=5:kk=3
+            parts = config.split(':')
+            k_part = parts[0].strip()
+            kk_part = parts[1].strip()
+            k_val = int(k_part.split('=')[1])
+            kk_val = int(kk_part.split('=')[1])
+            k_configs.append((f"k={k_val}, kk={kk_val}", k_val, kk_val))
+        else:
+            # Format: k=5
+            k_val = int(config.split('=')[1])
+            k_configs.append((f"k={k_val}", k_val, k_val))
+    
+    print(f"Comparing retrieval parameters: {', '.join([c[0] for c in k_configs])}")
+    print(f"Query: {query}\n")
+    
+    results = []
+    
+    for config_name, k_val, kk_val in k_configs:
+        print(f"Running query with {config_name}...")
+        
+        store_config = get_store_config(args)
+        
+        qa_system = QASystem(
+            store_type=args.store,
+            embedding_model=args.embedding_model,
+            llm_type=args.llm_type,
+            llm_model=args.llm_model,
+            enable_reranking=args.rerank and kk_val != k_val,  # Enable reranking if kk specified
+            reranker_type=args.rerank_type,
+            reranker_model=args.rerank_model,
+            expand_context=args.expand_context,
+            use_chunks_only=args.use_chunks_only,
+            **store_config
+        )
+        
+        result = qa_system.query(
+            question=query,
+            top_k=k_val,
+            rerank_top_k=kk_val if args.rerank and kk_val != k_val else None,
+            verbose=False,
+            extra_verbose=False,
+            show_rerank_results=False
+        )
+        
+        results.append({
+            'model': config_name,
+            'result': result,
+            'system_info': qa_system.get_system_info()
+        })
+    
+    _display_comparison_results(results, "Retrieval Parameter Comparison", args.rich)
+    return True
+
+
+def _display_comparison_results(results, title, use_rich=False):
+    """Display comparison results."""
+    if use_rich and RICH_AVAILABLE:
+        _display_comparison_results_rich(results, title)
+    else:
+        _display_comparison_results_standard(results, title)
+
+
+def _display_comparison_results_standard(results, title):
+    """Display comparison results in standard format."""
+    print(f"\n{'=' * 60}")
+    print(f"{title}")
+    print(f"{'=' * 60}\n")
+    
+    for i, result_data in enumerate(results, 1):
+        model_name = result_data['model']
+        result = result_data['result']
+        
+        print(f"{i}. {model_name}")
+        print("-" * 40)
+        print(f"Answer: {result['answer']}")
+        print(f"Documents used: {len(result['docs_with_scores'])}")
+        
+        if result['docs_with_scores']:
+            avg_score = sum(score for _, score in result['docs_with_scores']) / len(result['docs_with_scores'])
+            print(f"Average similarity: {avg_score:.4f}")
+        
+        print()
+
+
+def _display_comparison_results_rich(results, title):
+    """Display comparison results with rich formatting."""
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.console import Console
+    
+    console = Console()
+    
+    # Create main comparison panel
+    console.print(f"\n[bold blue]{title}[/bold blue]\n")
+    
+    for i, result_data in enumerate(results, 1):
+        model_name = result_data['model']
+        result = result_data['result']
+        
+        # Create answer panel for each model
+        answer_panel = Panel(
+            result['answer'],
+            title=f"{i}. {model_name}",
+            title_align="left",
+            border_style="green" if i == 1 else "yellow"
+        )
+        console.print(answer_panel)
+        
+        # Show brief stats
+        stats = f"Documents: {len(result['docs_with_scores'])}"
+        if result['docs_with_scores']:
+            avg_score = sum(score for _, score in result['docs_with_scores']) / len(result['docs_with_scores'])
+            stats += f" | Avg similarity: {avg_score:.4f}"
+        
+        console.print(f"[dim]{stats}[/dim]\n")
+
+
 def main():
     """Main entry point."""
     parser = create_argument_parser()
@@ -290,6 +526,14 @@ def main():
         print("Error: Cannot use both --json and --rich flags simultaneously. Choose one output format.")
         sys.exit(1)
     
+    # Check if any comparison mode is enabled
+    comparison_mode = bool(args.compare_models or args.compare_reranking or args.compare_k)
+    
+    # Validate comparison mode conflicts
+    if comparison_mode and args.json:
+        print("Error: JSON output not supported with comparison modes. Use --rich or standard output.")
+        sys.exit(1)
+    
     # Store original verbose settings for JSON output
     original_verbose = args.verbose
     original_extra_verbose = args.extra_verbose
@@ -300,6 +544,12 @@ def main():
         args.extra_verbose = False
     
     try:
+        # Handle comparison modes
+        if comparison_mode:
+            _run_comparison(args, query)
+            return
+        
+        # Regular single-query mode
         # Get store configuration
         store_config = get_store_config(args)
         
