@@ -80,6 +80,7 @@ Examples:
     parser.add_argument("--pinecone-index", help="Pinecone index name")
     parser.add_argument("--chroma-path", help="Chroma database path (default: CHROMA_PATH env or './chroma_db')")
     parser.add_argument("--chroma-index", help="Chroma collection name (default: CHROMA_INDEX env or 'default_index')")
+    parser.add_argument("--collections", "-c", help="Multiple collection names (comma-separated, overrides --chroma-index)")
     
     # Search arguments
     parser.add_argument("-k", "--top-k", type=int, default=4, help="Number of similar documents to retrieve (default: 4)")
@@ -483,6 +484,264 @@ def _display_comparison_results_rich(results, title):
         console.print(f"[dim]{stats}[/dim]\n")
 
 
+def _run_multi_collection_query(args, query):
+    """Run query across multiple collections."""
+    if args.verbose:
+        print(f"*** Querying multiple collections: {', '.join(args.collection_names)} ***")
+    
+    # Validate that all collections exist and are compatible
+    if args.store != "chroma":
+        print("Error: Multiple collections only supported with Chroma store.")
+        sys.exit(1)
+    
+    # Collect results from each collection
+    collection_results = []
+    all_docs_with_scores = []
+    
+    for collection_name in args.collection_names:
+        if args.verbose:
+            print(f"*** Processing collection: {collection_name} ***")
+        
+        # Create temporary args for this collection
+        temp_args = args.__class__(**vars(args))
+        temp_args.chroma_index = collection_name
+        temp_args.collection_names = None  # Prevent recursion
+        
+        try:
+            # Get store configuration for this collection
+            store_config = get_store_config(temp_args)
+            
+            # Create QA system for this collection
+            qa_system = QASystem(
+                store_type=args.store,
+                embedding_model=args.embedding_model,
+                llm_type=args.llm_type,
+                llm_model=args.llm_model,
+                enable_reranking=False,  # Disable per-collection reranking
+                reranker_type=args.rerank_type,
+                reranker_model=args.rerank_model,
+                expand_context=args.expand_context,
+                use_chunks_only=args.use_chunks_only,
+                **store_config
+            )
+            
+            # Perform similarity search only (no reranking yet)
+            docs_with_scores = qa_system.vector_store.similarity_search_with_score(query, k=args.top_k)
+            
+            # Add collection metadata to each document
+            for doc, score in docs_with_scores:
+                doc.metadata['collection_name'] = collection_name
+            
+            collection_results.append({
+                'collection': collection_name,
+                'docs_with_scores': docs_with_scores,
+                'qa_system': qa_system
+            })
+            
+            all_docs_with_scores.extend(docs_with_scores)
+            
+        except Exception as e:
+            print(f"Warning: Could not query collection '{collection_name}': {e}")
+            continue
+    
+    if not all_docs_with_scores:
+        print("Error: No documents retrieved from any collection.")
+        sys.exit(1)
+    
+    # Apply cross-collection reranking if enabled
+    final_docs_with_scores = all_docs_with_scores
+    
+    if args.rerank:
+        if args.verbose:
+            print(f"*** Cross-collection reranking: {len(all_docs_with_scores)} → {args.rerank_top_k} docs ***")
+        
+        # Create a new QA system with reranking enabled to get the reranker
+        first_collection = args.collection_names[0]
+        temp_args = args.__class__(**vars(args))
+        temp_args.chroma_index = first_collection
+        temp_args.collection_names = None
+        
+        store_config = get_store_config(temp_args)
+        
+        reranker_qa_system = QASystem(
+            store_type=args.store,
+            embedding_model=args.embedding_model,
+            llm_type=args.llm_type,
+            llm_model=args.llm_model,
+            enable_reranking=True,  # Enable reranking
+            reranker_type=args.rerank_type,
+            reranker_model=args.rerank_model,
+            expand_context=args.expand_context,
+            use_chunks_only=args.use_chunks_only,
+            **store_config
+        )
+        
+        reranker = reranker_qa_system.reranker
+        
+        if reranker:
+            # Show detailed reranking if requested
+            if args.show_rerank_results:
+                _display_multi_collection_rerank_details(collection_results, all_docs_with_scores, query, args.rerank_top_k, reranker)
+            
+            # Extract documents for reranking
+            docs = [doc for doc, score in all_docs_with_scores]
+            
+            # Rerank documents
+            final_docs_with_scores = reranker.rerank_documents(query, all_docs_with_scores, args.rerank_top_k, False)
+        else:
+            # No reranker available, just sort by similarity and take top k
+            sorted_docs = sorted(all_docs_with_scores, key=lambda x: x[1], reverse=True)
+            final_docs_with_scores = sorted_docs[:args.rerank_top_k]
+    
+    # Generate final answer using the first QA system's LLM
+    first_qa_system = collection_results[0]['qa_system']
+    from ask_core.utils import format_documents
+    
+    docs = [doc for doc, score in final_docs_with_scores]
+    context = format_documents(docs)
+    answer = first_qa_system.llm_manager.generate_response(context, query)
+    
+    # Display results
+    results = {
+        "question": query,
+        "answer": answer,
+        "docs_with_scores": final_docs_with_scores,
+        "metadata": {
+            "reranking_enabled": args.rerank,
+            "collections": args.collection_names,
+            "total_collections_queried": len(collection_results)
+        }
+    }
+    
+    system_info = first_qa_system.get_system_info()
+    system_info["store_info"]["collections"] = args.collection_names
+    
+    # Use appropriate display format
+    if args.json:
+        _display_results_json(
+            query=results["question"],
+            docs_with_scores=results["docs_with_scores"],
+            answer=results["answer"],
+            system_info=system_info,
+            preview_bytes=args.preview_bytes,
+            verbose=args.verbose,
+            reranking_enabled=results["metadata"]["reranking_enabled"]
+        )
+    elif args.rich:
+        console = VerboseConsole(is_verbose=args.verbose)
+        _display_results_rich(
+            console=console,
+            query=results["question"],
+            docs_with_scores=results["docs_with_scores"],
+            answer=results["answer"],
+            system_info=system_info,
+            preview_bytes=args.preview_bytes,
+            verbose=args.verbose,
+            reranking_enabled=results["metadata"]["reranking_enabled"]
+        )
+    else:
+        display_results(
+            query=results["question"],
+            docs_with_scores=results["docs_with_scores"],
+            answer=results["answer"],
+            store_info=system_info["store_info"],
+            llm_info=system_info["llm_info"],
+            preview_bytes=args.preview_bytes,
+            verbose=args.verbose,
+            reranking_enabled=results["metadata"]["reranking_enabled"]
+        )
+
+
+def _display_multi_collection_rerank_details(collection_results, all_docs_with_scores, query, rerank_top_k, reranker):
+    """Display detailed reranking information for multiple collections."""
+    print("\n*** Initial Retrieval Results ***\n")
+    
+    # Show per-collection results
+    for result in collection_results:
+        collection_name = result['collection']
+        docs_with_scores = result['docs_with_scores']
+        
+        print(f"Collection: {collection_name} ({len(docs_with_scores)} documents)")
+        for i, (doc, score) in enumerate(docs_with_scores[:10], 1):  # Show top 10
+            source = doc.metadata.get('source', 'unknown')
+            chunk_info = ""
+            if doc.metadata.get('chunk_index') is not None and doc.metadata.get('total_chunks') is not None:
+                chunk_info = f" (chunk {doc.metadata['chunk_index'] + 1}/{doc.metadata['total_chunks']})"
+            
+            # Truncate source name for display
+            source_display = source if len(source) <= 50 else source[:47] + "..."
+            print(f"  {i:2d}. {score:.4f} - {source_display}{chunk_info}")
+        
+        if len(docs_with_scores) > 10:
+            print(f"  ... and {len(docs_with_scores) - 10} more")
+        print()
+    
+    # Show top combined results before reranking
+    print(f"*** Cross-Collection Reranking Results ({len(all_docs_with_scores)} → {rerank_top_k}) ***\n")
+    
+    # Sort by similarity score
+    sorted_docs = sorted(all_docs_with_scores, key=lambda x: x[1], reverse=True)
+    
+    print("Pre-rerank (top 10 by similarity):")
+    for i, (doc, score) in enumerate(sorted_docs[:10], 1):
+        collection = doc.metadata.get('collection_name', 'unknown')
+        source = doc.metadata.get('source', 'unknown')
+        chunk_info = ""
+        if doc.metadata.get('chunk_index') is not None:
+            chunk_info = f" (chunk {doc.metadata['chunk_index'] + 1}/{doc.metadata.get('total_chunks', '?')})"
+        
+        source_display = source if len(source) <= 40 else source[:37] + "..."
+        print(f"  {i:2d}. {score:.4f} - [{collection}] {source_display}{chunk_info}")
+    
+    # Apply reranking
+    reranked_results = reranker.rerank_documents(query, all_docs_with_scores, rerank_top_k, False)
+    reranked_docs = [doc for doc, score in reranked_results]
+    
+    # Show post-rerank results
+    print(f"\nPost-rerank (final {len(reranked_docs)} sent to LLM):")
+    
+    # Count distribution
+    collection_count = {}
+    for i, doc in enumerate(reranked_docs, 1):
+        collection = doc.metadata.get('collection_name', 'unknown')
+        collection_count[collection] = collection_count.get(collection, 0) + 1
+        
+        source = doc.metadata.get('source', 'unknown')
+        source_display = source if len(source) <= 40 else source[:37] + "..."
+        
+        chunk_info = ""
+        if doc.metadata.get('chunk_index') is not None:
+            chunk_info = f" (chunk {doc.metadata['chunk_index'] + 1}/{doc.metadata.get('total_chunks', '?')})"
+        
+        # Find original position
+        original_pos = None
+        for j, (orig_doc, _) in enumerate(sorted_docs):
+            if orig_doc.metadata.get('doc_id') == doc.metadata.get('doc_id'):
+                original_pos = j + 1
+                break
+        
+        position_info = f" [was #{original_pos}]" if original_pos else ""
+        
+        # Get rerank score from the reranked results
+        rerank_score = 'N/A'
+        if i <= len(reranked_results):
+            _, score = reranked_results[i-1]  # Get score from tuple
+            rerank_score = score
+        
+        if isinstance(rerank_score, float):
+            print(f"  {i:2d}. {rerank_score:.4f} ↗️ [{collection}] {source_display}{chunk_info}{position_info}")
+        else:
+            print(f"  {i:2d}. N/A ↗️ [{collection}] {source_display}{chunk_info}{position_info}")
+    
+    # Show distribution
+    print(f"\nCollection Distribution in Final Results:")
+    for collection, count in collection_count.items():
+        percentage = (count / len(reranked_docs)) * 100
+        print(f"- {collection}: {count} documents ({percentage:.0f}%)")
+    
+    print(f"\n*** Generating answer from {len(reranked_docs)} cross-collection documents ***")
+
+
 def main():
     """Main entry point."""
     parser = create_argument_parser()
@@ -511,6 +770,15 @@ def main():
     # Set rerank_top_k default
     if args.rerank_top_k is None:
         args.rerank_top_k = args.top_k
+    
+    # Process multiple collections
+    if args.collections:
+        args.collection_names = [name.strip() for name in args.collections.split(',')]
+        # Override chroma-index if collections specified
+        if args.store == "chroma":
+            args.chroma_index = args.collection_names[0]  # For compatibility, use first collection
+    else:
+        args.collection_names = None
     
     # Set verbose if extra-verbose is enabled
     if args.extra_verbose:
@@ -547,6 +815,11 @@ def main():
         # Handle comparison modes
         if comparison_mode:
             _run_comparison(args, query)
+            return
+        
+        # Handle multiple collections mode
+        if args.collection_names and len(args.collection_names) > 1:
+            _run_multi_collection_query(args, query)
             return
         
         # Regular single-query mode
