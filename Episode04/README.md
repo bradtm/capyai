@@ -1,358 +1,291 @@
-# RAG Media Query System
+# Advanced RAG Media Query System
 
-A Python-based Retrieval-Augmented Generation (RAG) system that processes various media files (audio, video, text, PDFs) and web pages, enabling natural language querying of their content using OpenAI's GPT models and embedding technology.
+A Python-based Retrieval-Augmented Generation (RAG) system that processes various media files (audio, video, text, PDFs) and web pages, enabling sophisticated natural language querying with reranking, multiple collection support, and rich output formatting.
 
 ## What It Does
 
-This system:
-- **Processes multiple media formats**: Audio (MP3, WAV), Video (MP4, AVI, MOV, MKV, WEBM, FLV, M4V, 3GP), TXT, and PDF documents
-- **Extracts web content**: Scrapes and extracts text content from web pages
-- **Transcribes audio and video**: Uses OpenAI Whisper to convert audio/video files to text transcripts
-- **Extracts text**: Extracts readable text from PDFs and web pages 
-- **Creates searchable knowledge base**: Splits content into chunks and generates embeddings for semantic search
-- **Answers questions**: Uses RAG to find relevant content and generate answers using GPT-3.5-turbo
-- **Supports three storage options**: 
-  - FAISS local vector store (default, persistent local storage)
-  - Pinecone cloud vector database (optional, requires API key)
-  - ChromaDB vector database (optional, local persistent storage with advanced features)
+This system provides a comprehensive RAG solution with:
+- **Multi-format media processing**: Audio (MP3, WAV), Video (MP4, AVI, MOV, MKV, WEBM, FLV, M4V, 3GP), TXT, and PDF documents
+- **Web content extraction**: Intelligent web scraping with content detection
+- **Multiple vector stores**: FAISS (local), Pinecone (cloud), ChromaDB (local persistent)
+- **Advanced reranking**: HuggingFace and Cohere rerankers for improved relevance
+- **Context expansion**: Intelligent chunk expansion around matches
+- **Multiple collections**: Query across multiple document collections simultaneously 
+- **Rich output formats**: Standard text, rich formatted output, structured JSON
+- **Model comparisons**: Compare answers across different LLMs and configurations
+- **Auto-detection**: Automatic embedding model detection from vector store metadata
 
-## Prerequisites
+## Quick Start
 
-### 1. Setup Python Environment
-
-Create and activate a new Python 3 virtual environment:
-
+### 1. Process Media Files
 ```bash
-python3 -m venv rag_env
-source rag_env/bin/activate
+# Create searchable knowledge base from media files
+python3 rag.py ./media_directory/
+
+# Or with specific vector store
+python3 rag.py --store chroma ./media_directory/
 ```
 
-### 2. Upgrade pip (Optional but recommended)
-
+### 2. Query Your Knowledge Base
 ```bash
-pip install --upgrade pip
+# Basic query
+python3 ask.py "What is machine learning?"
+
+# Advanced query with rich formatting
+python3 ask.py --rich -v "What is machine learning?"
+
+# Query with reranking for better results
+python3 ask.py --rerank -k 10 -kk 4 "What is machine learning?"
 ```
 
-### 3. Install Required Packages
+## Advanced Usage
 
+### Multiple Collection Support
 ```bash
-pip install -r requirements.txt
+# Query across multiple collections
+python3 ask.py --collections "podcasts,docs,research" "What does the research say?"
+
+# With detailed reranking visualization
+python3 ask.py -c "podcasts,docs" -k 20 -kk 5 --rerank --show-rerank-results "AI trends"
 ```
 
-This will install all the necessary dependencies:
-- `python-dotenv` - Environment variable management
-- `openai-whisper` - Audio transcription using OpenAI Whisper models
-- `openai` - OpenAI API client for GPT models and embeddings
-- `langchain` - Core LangChain framework for LLM applications
-- `langchain-openai` - OpenAI integrations for LangChain (embeddings, chat models)
-- `langchain-community` - Community integrations and vector stores for LangChain
-- `langchain-pinecone` - Pinecone vector database integration for LangChain
-- `langchain-chroma` - ChromaDB vector database integration for LangChain
-- `pypdf` - PDF text extraction and processing
-- `docarray` - Document array operations for vector storage
-- `faiss-cpu` - Facebook AI Similarity Search for local vector storage
-- `requests` - HTTP requests for web scraping and API calls
-- `beautifulsoup4` - HTML parsing and content extraction from web pages
-- `lxml` - XML/HTML parser backend for BeautifulSoup
-- `tqdm` - Progress bars for long-running operations
-- `chromadb` - ChromaDB vector database engine
-
-
-## Environment Setup
-
-Create a `.env` file in your project directory with the following variables:
-
-### Required Variables
-
-```env
-OPENAI_API_KEY=your_openai_api_key_here
-TRANSCRIPT_DIR=/path/to/transcript/directory
-```
-
-### Optional Variables (for Pinecone integration)
-
-```env
-PINECONE_API_KEY=your_pinecone_api_key_here
-PINECONE_INDEX=your_index_name
-```
-
-### Optional Variables (for ChromaDB integration)
-
-```env
-CHROMA_PATH=/path/to/chroma/database
-CHROMA_INDEX=your_collection_name
-```
-
-**Note**: If neither Pinecone nor ChromaDB credentials are provided, the system will automatically use FAISS local storage.
-
-### Environment Variable Details
-
-- **`OPENAI_API_KEY`**: Your OpenAI API key for GPT and embedding models
-- **`TRANSCRIPT_DIR`**: Directory where transcript files will be stored/cached
-- **`PINECONE_API_KEY`** *(Optional)*: Your Pinecone API key for cloud vector storage
-- **`PINECONE_INDEX`** *(Optional)*: Name of your Pinecone index
-- **`CHROMA_PATH`** *(Optional)*: Directory path for ChromaDB database (defaults to './chroma_db')
-- **`CHROMA_INDEX`** *(Optional)*: ChromaDB collection name (defaults to 'default_index')
-
-## Usage
-
-### Basic Syntax
-
+### Model and Configuration Comparisons
 ```bash
-# Process media files in a directory (FAISS - default)
-python3 rag.py <MediaDirectory>
+# Compare different LLM models
+python3 ask.py --compare-models "gpt-4o,gpt-3.5-turbo" "What is AI?"
 
-# Process with specific storage backend
-python3 rag.py --store faiss <MediaDirectory>     # FAISS local storage
-python3 rag.py --store pinecone <MediaDirectory>  # Pinecone cloud storage  
-python3 rag.py --store chroma <MediaDirectory>    # ChromaDB local storage
+# Compare with/without reranking
+python3 ask.py --compare-reranking --rerank "What is AI?"
 
-# Process a single web page
-python3 rag.py <URL>
+# Compare different retrieval parameters
+python3 ask.py --compare-k "k=5,k=10,k=20" "What is AI?"
 ```
 
-### Examples
+### Output Formats
 
-#### Processing a Web Page
-
+#### Rich Formatted Output
 ```bash
-# Process a web page and create/update vector index
-python3 rag.py https://en.wikipedia.org/wiki/Artificial_intelligence
-
-*** Processing URL: https://en.wikipedia.org/wiki/Artificial_intelligence ***
-*** Fetching web page: https://en.wikipedia.org/wiki/Artificial_intelligence ***
-*** Extracted 45234 characters from web page ***
-*** Split web page into 67 documents ***
+python3 ask.py --rich "What is machine learning?"
 ```
+Shows beautifully formatted answers with colored panels and enhanced readability.
 
-#### Processing Media Files Directory
-
+#### JSON Output
 ```bash
-# This is the first time the media files have been seen, so the PDF's and audio
-# files need to be processed and the results will be saved to TRANSCRIPT_DIR to
-# avoid reprocessing
-
-python3 rag.py ./files
-
-*** No Pinecone configuration - using FAISS vector store ***
-
-*** Processing file: NIPS-2017-attention-is-all-you-need-Paper.pdf ***
-*** Transcript file: ./transcripts/NIPS-2017-attention-is-all-you-need-Paper.txt ***
-*** Split transcript into 53 documents ***
-
-*** Processing file: Adams.txt ***
-*** Transcript file: ./transcripts/Adams.txt ***
-*** Split transcript into 143 documents ***
-
-*** Processing file: Uber.mp3 ***
-*** Transcript file: ./transcripts/Uber.txt ***
-*** Transcribing audio: files/Uber.mp3 ***
-*** Transcribed in 202.18 seconds; 80459 characters
-*** Split transcript into 134 documents ***
-
-*** Answer using in-memory vector store: ***
-A recurrent neural network (RNN) is a type of neural network that is designed to recognize patterns in sequences of data, such as text or speech.
+python3 ask.py --json "What is machine learning?"
+```
+Returns structured JSON perfect for API integration:
+```json
+{
+  "query": "What is machine learning?",
+  "answer": "Machine learning is...",
+  "references": [...],
+  "metadata": {...}
+}
 ```
 
-
+### Context Expansion and Verbose Modes
 ```bash
-# Running the script again will avoid the time consuming extraction of the text
-# from audio files, and use the cached transcript in TRANSCRIPT_DIR
+# Verbose mode with context expansion details
+python3 ask.py -v --expand-context 3 "What is AI?"
 
-python3 rag.py ./files what is a transformer 
-
-*** No Pinecone configuration - using FAISS vector store ***
-
-*** Processing file: NIPS-2017-attention-is-all-you-need-Paper.pdf ***
-*** Transcript file: ./transcripts/NIPS-2017-attention-is-all-you-need-Paper.txt ***
-*** Skipping extraction/transcription; text file already exists ***
-*** Split transcript into 55 documents ***
-
-*** Processing file: Adams.txt ***
-*** Transcript file: ./transcripts/Adams.txt ***
-*** Skipping extraction/transcription; text file already exists ***
-*** Split transcript into 143 documents ***
-
-*** Processing file: Uber.mp3 ***
-*** Transcript file: ./transcripts/Uber.txt ***
-*** Skipping extraction/transcription; text file already exists ***
-*** Split transcript into 134 documents ***
-
-*** Answer using FAISS vector store: ***
-A transformer is a model architecture that relies entirely on an attention mechanism to draw global dependencies between input and output, eschewing recurrence typically used in traditional sequence transduction models.
-
+# Extra verbose mode showing detailed processing
+python3 ask.py -vv "What is AI?"
 ```
 
-#### Processing with ChromaDB
+The `-vv` mode shows detailed progress similar to:
+```
+- Processing collection: research_papers
+  - Found 2 relevant chunks at positions: [45, 67]  
+  - Expanding to include chunks: [43, 44, 45, 46, 47, 65, 66, 67, 68, 69]
+  - Retrieved 10 contextual chunks (was getting 1 chunk without expansion)
+  - Context size: 8,451 chars (vs ~845 chars for single chunk)
+```
 
+### Reranking with Detailed Results
 ```bash
-# First time setup with ChromaDB
-python3 rag.py --store chroma ./files
-
-*** Using ChromaDB vector store ***
-*** Created new Chroma collection: default_index ***
-
-*** Processing file: NIPS-2017-attention-is-all-you-need-Paper.pdf ***
-*** Added documents to ChromaDB collection ***
-
-*** Answer using ChromaDB: ***
-A transformer is a model architecture that relies entirely on an attention mechanism...
-
-# Subsequent runs with ChromaDB (uses cached transcripts)
-python3 rag.py --store chroma ./files "what is attention mechanism"
-
-*** Using ChromaDB vector store ***
-*** Found existing Chroma collection: default_index ***
-*** Skipping extraction/transcription; text file already exists ***
-*** Added documents to ChromaDB collection ***
-
-*** Answer using ChromaDB: ***
-The attention mechanism allows the model to focus on different parts of the input sequence...
+python3 ask.py --rerank --show-rerank-results -k 20 -kk 4 "What is machine learning?"
 ```
 
-### Parameters
+Shows comprehensive reranking analysis:
+```
+*** Cross-Collection Reranking Results (20 → 4) ***
 
-- **`MediaDirectory`**: Path to directory containing your media files (supports .mp3, .wav, .txt, .pdf, video files)
-- **`URL`**: Web page URL to process and add to knowledge base
-- **`--store`**: Storage backend (faiss, pinecone, chroma)
-- **`--chroma-path`**: Override ChromaDB database path
-- **`--chroma-index`**: Override ChromaDB collection name
-- **`--chunk-size`**: Text chunk size (default: 1000)
-- **`--chunk-overlap`**: Text chunk overlap (default: 400)
+Pre-rerank (top 10 by similarity):
+  1. 0.8456 - [docs] Machine learning fundamentals... (chunk 23/156)
+  2. 0.8234 - [research] AI and ML overview... (chunk 59/100) 
+  ...
 
-## How It Works
+Post-rerank (final 4 sent to LLM):
+  1. 0.9234 ↗️ [research] AI and ML overview... (chunk 59/100) [was #2]
+  2. 0.9156 ↗️ [docs] Machine learning fundamentals... (chunk 23/156) [was #1]
+  ...
 
-1. **File Processing**: The system scans the specified directory for supported media files
-2. **Content Extraction**:
-   - Audio files (.mp3, .wav): Transcribed using OpenAI Whisper
-   - PDF files: Text extracted using PyPDF
-   - Text files: Content read directly
-3. **Transcript Caching**: All extracted/transcribed content is saved to the transcript directory to avoid reprocessing
-4. **Text Chunking**: Content is split into overlapping chunks for optimal retrieval
-5. **Embedding Generation**: Each chunk is converted to vector embeddings using OpenAI's embedding model
-6. **Vector Storage**: Embeddings stored in either:
-   - DocArrayInMemorySearch (default)
-   - Pinecone cloud database (if credentials are provided)
-7. **Query Processing**: Your question is embedded and matched against stored content
-8. **Answer Generation**: Relevant chunks are retrieved and used as context for GPT to generate an answer
+Collection Distribution in Final Results:
+- research: 2 documents (50%)
+- docs: 2 documents (50%)
+```
 
-## Storage Options
+## LLM and Embedding Support
 
-### FAISS Vector Store (Default)
-- **Pros**: Local persistent storage, no API keys required, fast retrieval, free
-- **Cons**: Single-machine only, limited scalability
-- **Use case**: Personal use, development, medium datasets, offline usage
-- **Setup**: No additional configuration needed
+### LLM Providers
+- **OpenAI**: GPT-4o, GPT-3.5-turbo, GPT-4-turbo
+- **HuggingFace**: Various open-source models
+- **Ollama**: Local models (llama2, mistral, etc.)
 
-### Pinecone Vector Store (Optional)
-- **Pros**: Cloud-based, highly scalable, managed service, fast retrieval
-- **Cons**: Requires API key and setup, usage costs, internet dependency
-- **Use case**: Production deployments, large datasets, team collaboration
-- **Setup**: Requires `PINECONE_API_KEY` and `PINECONE_INDEX`
+### Embedding Models
+- **OpenAI**: text-embedding-3-small, text-embedding-3-large
+- **HuggingFace**: BGE-M3, all-MiniLM-L6-v2
+- **Nomic**: nomic-embed-text
 
-### ChromaDB Vector Store (Optional)
-- **Pros**: Local persistent storage, advanced metadata filtering, SQL-like queries, free
-- **Cons**: Additional dependencies, single-machine storage
-- **Use case**: Advanced local deployments, complex metadata queries, development
-- **Setup**: Requires `langchain-chroma` and `chromadb` packages (included in requirements.txt)
+### Rerankers
+- **HuggingFace**: ms-marco-MiniLM-L-6-v2, cross-encoder models
+- **Cohere**: rerank-english-v2.0, rerank-multilingual-v2.0
 
-### Querying Existing Vector Stores
+## Command Reference
 
-If you have already processed files and created embeddings with any storage backend, use the `ask.py` script for additional queries without reprocessing:
-
+### Basic Commands
 ```bash
-# Query existing FAISS index
-python3 ask.py "your question here"
+# Query existing knowledge base
+python3 ask.py "your question"
 
-# Query existing Pinecone index  
-python3 ask.py --store pinecone "your question here"
+# Verbose output with system info
+python3 ask.py -v "your question"
 
-# Query existing ChromaDB collection
-python3 ask.py --store chroma "your question here"
+# Extra verbose with detailed processing
+python3 ask.py -vv "your question"
+
+# Rich formatted output  
+python3 ask.py --rich "your question"
+
+# JSON output for APIs
+python3 ask.py --json "your question"
 ```
 
-The `rag.py` script handles content extraction and embedding creation, while `ask.py` only queries existing vector stores. For Pinecone users, this avoids unnecessary embedding costs when asking new questions.
-
-**Note**: Web page content is cached to the transcript directory just like media files, so re-running the same URL will use the cached content unless manually deleted.
-
-## ChromaDB Advanced Usage
-
-ChromaDB offers additional features beyond basic storage:
-
-### Custom Collection and Path
+### Vector Store Options
 ```bash
-# Use custom ChromaDB path and collection name
-python3 rag.py --store chroma --chroma-path ./my_knowledge_base --chroma-index research_papers ./documents/
+# FAISS (local, default)
+python3 ask.py --store faiss "your question"
 
-# Override environment variables temporarily  
-python3 rag.py --store chroma --chroma-path /tmp/chroma_test --chroma-index test_collection ./files/
+# Pinecone (cloud)
+python3 ask.py --store pinecone "your question"
+
+# ChromaDB (local persistent) 
+python3 ask.py --store chroma "your question"
 ```
 
-### Chunk Size Optimization
-```bash  
-# Use smaller chunks for better precision
-python3 rag.py --store chroma --chunk-size 500 --chunk-overlap 100 ./documents/
-
-# Use larger chunks for more context
-python3 rag.py --store chroma --chunk-size 2000 --chunk-overlap 500 ./documents/
-```
-
-### Querying ChromaDB
+### Retrieval Configuration
 ```bash
-# Query with specific ChromaDB settings
-python3 ask.py --store chroma --chroma-path ./my_knowledge_base --chroma-index research_papers "What is machine learning?"
+# Basic retrieval parameters
+python3 ask.py -k 10 "your question"              # Get 10 documents
 
-# Use environment variables for repeated queries
-export CHROMA_PATH=./my_knowledge_base
-export CHROMA_INDEX=research_papers
-python3 ask.py --store chroma "Explain neural networks"
+# With reranking
+python3 ask.py -k 20 -kk 5 --rerank "your question"  # Get 20, rerank to top 5
+
+# Context expansion
+python3 ask.py --expand-context 3 "your question"  # Expand ±3 chunks around matches
+
+# Show reranking details
+python3 ask.py --rerank --show-rerank-results "your question"
 ```
 
-## Output
+### Multiple Collections
+```bash
+# Query multiple collections
+python3 ask.py -c "collection1,collection2,collection3" "your question"
 
-The system provides a single response using your configured storage backend:
-- **FAISS**: Local persistent vector store (default)
-- **Pinecone**: Cloud vector database (if API credentials provided)
-- **ChromaDB**: Local persistent vector database with advanced features
+# With reranking across collections
+python3 ask.py -c "docs,research" -k 15 -kk 4 --rerank "your question"
+```
 
-If no specific storage is configured, FAISS is used as the default.
+### Model Comparisons
+```bash
+# Compare LLM models
+python3 ask.py --compare-models "gpt-4o,gpt-3.5-turbo,claude-3.5" "your question"
 
-## File Support
+# Compare reranking effectiveness  
+python3 ask.py --compare-reranking --rerank "your question"
 
-| Format | Extension/Input | Processing Method |
-|--------|-----------|-------------------|
-| Audio | .mp3, .wav | OpenAI Whisper transcription |
-| Video | .mp4, .avi, .mov, .mkv, .webm, .flv, .m4v, .3gp | OpenAI Whisper transcription (audio extraction) |
-| Text | .txt | Direct reading |
-| PDF | .pdf | PyPDF text extraction |
-| Web Pages | HTTP/HTTPS URLs | BeautifulSoup web scraping and text extraction |
+# Compare retrieval parameters
+python3 ask.py --compare-k "k=5,k=10,k=20" "your question"
+python3 ask.py --compare-k "k=20:kk=3,k=20:kk=5,k=20:kk=10" "your question"
+```
 
-## Performance Notes
+## Vector Store Comparison
 
-- **First run**: Audio transcription may take time depending on file size
-- **Subsequent runs**: Cached transcripts are reused for faster processing
-- **Whisper model**: Uses 'base' model for balance of speed and accuracy
-- **Chunk overlap**: 400 characters overlap ensures context preservation
+| Feature | FAISS | Pinecone | ChromaDB |
+|---------|-------|----------|----------|
+| **Storage** | Local persistent | Cloud managed | Local persistent |
+| **Cost** | Free | Usage-based pricing | Free |
+| **Scalability** | Single machine | Highly scalable | Single machine |
+| **Setup** | No config needed | API key required | Local setup |
+| **Collections** | Single collection | Multiple indexes | Multiple collections |
+| **Metadata** | Basic | Advanced filtering | Advanced SQL-like |
+| **Internet** | Offline capable | Requires connection | Offline capable |
 
-## Troubleshooting
+## Performance Features
 
-### Common Issues
+### Caching and Optimization
+- **Transcript caching**: Processed content cached to avoid re-extraction
+- **Incremental processing**: Only processes new/changed files
+- **Embedding model auto-detection**: Automatically uses compatible embeddings
+- **Context expansion**: Retrieves surrounding chunks for better context
 
-1. **Missing API keys**: Ensure `OPENAI_API_KEY` is set in your `.env` file
-2. **Transcript directory**: Make sure the `TRANSCRIPT_DIR` exists and is writable
-3. **Audio processing**: First-time audio transcription requires internet connection for Whisper model download
-4. **Pinecone errors**: If Pinecone fails, the system will fall back to in-memory storage
+### Intelligent Processing
+- **Smart web scraping**: Detects main content vs navigation/ads
+- **File change detection**: Tracks file modifications to avoid reprocessing  
+- **Chunk overlap**: Preserves context across chunk boundaries
+- **Document metadata**: Tracks source files, chunk positions, timestamps
 
-### Error Messages
+## Integration Examples
 
-- `"Error: OPENAI_API_KEY and TRANSCRIPT_DIR must be set"`: Check your `.env` file
-- `"Skipping Pinecone-based response (missing PINECONE_API_KEY)"`: Normal when Pinecone is not configured
-- `"Error: Chroma dependencies not installed"`: Install ChromaDB with `pip install langchain-chroma chromadb`
-- `"Error: Chroma database not found"`: ChromaDB collection doesn't exist, run `rag.py --store chroma` first
-- `"Index did not become available within 10 seconds"`: Pinecone index creation timeout (usually resolves on retry)
+### API Integration (JSON Mode)
+```python
+import subprocess
+import json
+
+result = subprocess.run([
+    'python3', 'ask.py', '--json', '--store', 'chroma', 
+    'What is machine learning?'
+], capture_output=True, text=True)
+
+data = json.loads(result.stdout)
+answer = data['answer']
+references = data['references'] 
+```
+
+### Batch Processing
+```bash
+# Process multiple queries
+while IFS= read -r query; do
+    echo "Query: $query"
+    python3 ask.py --json "$query" | jq '.answer'
+    echo "---"
+done < queries.txt
+```
+
+### Web Interface Integration
+The JSON output format makes it easy to integrate with web applications, APIs, and other services.
+```
+
+## Development
+
+### Modular Architecture
+- `ask_core/` - Core RAG system components
+- `ask_core/qa_system.py` - Main question-answering logic
+- `ask_core/embeddings.py` - Embedding model management
+- `ask_core/vector_stores.py` - Vector store abstractions  
+- `ask_core/rerankers.py` - Reranking implementations
+- `ask_core/llm_managers.py` - LLM provider integrations
+
+### Extending the System
+The modular design makes it easy to:
+- Add new vector stores
+- Integrate additional LLM providers
+- Implement custom rerankers
+- Add new output formats
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) file for details.
 
 Copyright (c) 2025 [Brad McMillen/CapyAI]
