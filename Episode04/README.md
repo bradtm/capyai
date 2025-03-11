@@ -265,7 +265,6 @@ done < queries.txt
 
 ### Web Interface Integration
 The JSON output format makes it easy to integrate with web applications, APIs, and other services.
-```
 
 ## Development
 
