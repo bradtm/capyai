@@ -108,6 +108,10 @@ Examples:
     parser.add_argument("--expand-context", type=int, default=2, help="Number of chunks to expand before/after each match for context (default: 2)")
     parser.add_argument("--use-chunks-only", action="store_true", help="Use individual chunks only without context expansion")
     
+    # Answer validation arguments
+    parser.add_argument("--no-validation", action="store_true", help="Disable answer validation against context (validation enabled by default)")
+    parser.add_argument("--validation-verbose", action="store_true", help="Show detailed validation process (requires --verbose)")
+    
     # Output arguments
     parser.add_argument("--preview-bytes", type=int, default=0, help="Number of bytes to show from each document in references (default: 0, no content)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
@@ -289,6 +293,7 @@ def _compare_models(args, query):
             reranker_model=args.rerank_model,
             expand_context=args.expand_context,
             use_chunks_only=args.use_chunks_only,
+            enable_answer_validation=not args.no_validation,
             **store_config
         )
         
@@ -338,6 +343,7 @@ def _compare_reranking(args, query):
             reranker_model=args.rerank_model,
             expand_context=args.expand_context,
             use_chunks_only=args.use_chunks_only,
+            enable_answer_validation=not args.no_validation,
             **store_config
         )
         
@@ -399,6 +405,7 @@ def _compare_k_values(args, query):
             reranker_model=args.rerank_model,
             expand_context=args.expand_context,
             use_chunks_only=args.use_chunks_only,
+            enable_answer_validation=not args.no_validation,
             **store_config
         )
         
@@ -522,6 +529,7 @@ def _run_multi_collection_query(args, query):
                 reranker_model=args.rerank_model,
                 expand_context=args.expand_context,
                 use_chunks_only=args.use_chunks_only,
+                enable_answer_validation=not args.no_validation,
                 **store_config
             )
             
@@ -573,6 +581,7 @@ def _run_multi_collection_query(args, query):
             reranker_model=args.rerank_model,
             expand_context=args.expand_context,
             use_chunks_only=args.use_chunks_only,
+            enable_answer_validation=not args.no_validation,
             **store_config
         )
         
@@ -837,6 +846,7 @@ def main():
             reranker_model=args.rerank_model,
             expand_context=args.expand_context,
             use_chunks_only=args.use_chunks_only,
+            enable_answer_validation=not args.no_validation,
             **store_config
         )
         

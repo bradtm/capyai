@@ -9,6 +9,7 @@ from .vector_stores import VectorStoreManager
 from .llm_models import LLMManager
 from .rerankers import RerankerManager, check_reranking_dependencies
 from .utils import format_documents, print_system_info, expand_context_chunks
+from .answer_validator import AnswerValidator
 
 
 class QASystem:
@@ -18,7 +19,8 @@ class QASystem:
                  llm_type: str = "openai", llm_model: str = "gpt-3.5-turbo",
                  enable_reranking: bool = False, reranker_type: str = "huggingface",
                  reranker_model: str = "quality", expand_context: int = 2, 
-                 use_chunks_only: bool = False, **store_kwargs):
+                 use_chunks_only: bool = False, enable_answer_validation: bool = True,
+                 **store_kwargs):
         """
         Initialize the QA system with all components.
         
@@ -32,6 +34,7 @@ class QASystem:
             reranker_model: Reranker model name
             expand_context: Number of chunks to expand before/after each match (0 to disable)
             use_chunks_only: Whether to disable context expansion
+            enable_answer_validation: Whether to enable answer validation against context
             **store_kwargs: Additional arguments for vector store setup
         """
         self.store_type = store_type
@@ -41,6 +44,7 @@ class QASystem:
         self.enable_reranking = enable_reranking
         self.expand_context = expand_context
         self.use_chunks_only = use_chunks_only
+        self.enable_answer_validation = enable_answer_validation
         
         # Auto-detect embedding model from metadata if using default
         if embedding_model == "text-embedding-3-small":
@@ -72,6 +76,11 @@ class QASystem:
                 self.reranker = RerankerManager(reranker_type, reranker_model)
             else:
                 raise RuntimeError(deps["error_message"])
+        
+        # Initialize answer validator if enabled
+        self.answer_validator = None
+        if enable_answer_validation:
+            self.answer_validator = AnswerValidator()
     
     def query(self, question: str, top_k: int = 4, rerank_top_k: Optional[int] = None,
               verbose: bool = False, extra_verbose: bool = False, show_rerank_results: bool = False) -> Dict[str, Any]:
@@ -155,6 +164,22 @@ class QASystem:
             context = format_documents(docs)
             answer = self.llm_manager.generate_response(context, question)
         
+        # Validate answer against context if enabled
+        validation_details = {}
+        if self.answer_validator and docs:
+            # Use verbose for validation if either verbose or extra_verbose is enabled
+            validation_verbose = verbose or extra_verbose
+            is_valid, validated_answer, validation_details = self.answer_validator.validate_answer(
+                answer, context, question, verbose=validation_verbose
+            )
+            
+            if not is_valid:
+                if verbose:
+                    print(f"*** Answer validation failed: {validation_details['final_decision']['reason']} ***")
+                answer = validated_answer  # This will be "I don't know"
+            elif verbose:
+                print("*** Answer validation passed ***")
+        
         return {
             "question": question,
             "answer": answer,
@@ -162,12 +187,14 @@ class QASystem:
             "scores": [score for doc, score in docs_with_scores],
             "docs_with_scores": docs_with_scores,
             "context": context,
+            "validation_details": validation_details,
             "metadata": {
                 "store_type": self.store_type,
                 "embedding_model": self.embedding_model,
                 "llm_type": self.llm_type,
                 "llm_model": self.llm_model,
                 "reranking_enabled": self.enable_reranking and self.reranker is not None,
+                "answer_validation_enabled": self.enable_answer_validation and self.answer_validator is not None,
                 "num_documents": len(docs)
             }
         }
