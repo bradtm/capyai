@@ -114,6 +114,7 @@ Examples:
     
     # Output arguments
     parser.add_argument("--preview-bytes", type=int, default=0, help="Number of bytes to show from each document in references (default: 0, no content)")
+    parser.add_argument("--show-all-references", action="store_true", help="Show all retrieved references instead of only those that contributed to the answer")
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
     parser.add_argument("-vv", "--extra-verbose", action="store_true", help="Extra verbose output showing detailed processing steps (implies -v)")
     parser.add_argument("--rich", action="store_true", help="Enable rich console formatting similar to cask.py")
@@ -128,7 +129,7 @@ Examples:
 
 
 def _display_results_rich(console, query, docs_with_scores, answer, system_info, 
-                         preview_bytes=0, verbose=False, reranking_enabled=False):
+                         preview_bytes=0, verbose=False, reranking_enabled=False, show_all_references=False):
     """Display results using rich formatting similar to cask.py."""
     from rich.panel import Panel
     from rich.markdown import Markdown
@@ -142,11 +143,25 @@ def _display_results_rich(console, query, docs_with_scores, answer, system_info,
     )
     console.print(answer_panel)
     
+    # Filter references to only contributing ones unless --show-all-references is used
+    display_docs = docs_with_scores
+    if not show_all_references and docs_with_scores:
+        from ask_core.reference_filter import ReferenceFilter
+        filter = ReferenceFilter()
+        display_docs = filter.filter_contributing_references(answer, docs_with_scores, verbose=verbose)
+    
     # Display references
-    if docs_with_scores:
-        console.print(f"\n[bold]References:[/bold] {len(docs_with_scores)} documents")
+    if display_docs:
+        if show_all_references:
+            console.print(f"\n[bold]References:[/bold] {len(display_docs)} documents (all retrieved)")
+        else:
+            filtered_count = len(docs_with_scores) - len(display_docs)
+            if filtered_count > 0:
+                console.print(f"\n[bold]References:[/bold] {len(display_docs)} documents (filtered out {filtered_count} non-contributing)")
+            else:
+                console.print(f"\n[bold]References:[/bold] {len(display_docs)} documents")
         
-        for i, (doc, score) in enumerate(docs_with_scores, 1):
+        for i, (doc, score) in enumerate(display_docs, 1):
             doc_id = doc.metadata.get('doc_id', 'unknown')[:16] + '...'
             source = doc.metadata.get('source', 'unknown')
             
@@ -196,12 +211,19 @@ def _display_results_rich(console, query, docs_with_scores, answer, system_info,
 
 
 def _display_results_json(query, docs_with_scores, answer, system_info, 
-                         preview_bytes=0, verbose=False, reranking_enabled=False):
+                         preview_bytes=0, verbose=False, reranking_enabled=False, show_all_references=False):
     """Display results in JSON format similar to cask.py."""
+    
+    # Filter references to only contributing ones unless --show-all-references is used
+    display_docs = docs_with_scores
+    if not show_all_references and docs_with_scores:
+        from ask_core.reference_filter import ReferenceFilter
+        filter = ReferenceFilter()
+        display_docs = filter.filter_contributing_references(answer, docs_with_scores, verbose=verbose)
     
     # Build references list
     references = []
-    for i, (doc, score) in enumerate(docs_with_scores):
+    for i, (doc, score) in enumerate(display_docs):
         doc_id = doc.metadata.get('doc_id', 'unknown')
         source = doc.metadata.get('source', 'unknown')
         chunk_index = doc.metadata.get('chunk_index')
@@ -235,7 +257,10 @@ def _display_results_json(query, docs_with_scores, answer, system_info,
         "answer": answer,
         "references": references,
         "metadata": {
-            "num_documents": len(docs_with_scores),
+            "num_documents": len(display_docs),
+            "total_retrieved": len(docs_with_scores),
+            "filtered_count": len(docs_with_scores) - len(display_docs),
+            "references_filtered": not show_all_references,
             "reranking_enabled": reranking_enabled
         }
     }
@@ -634,7 +659,8 @@ def _run_multi_collection_query(args, query):
             system_info=system_info,
             preview_bytes=args.preview_bytes,
             verbose=args.verbose,
-            reranking_enabled=results["metadata"]["reranking_enabled"]
+            reranking_enabled=results["metadata"]["reranking_enabled"],
+            show_all_references=args.show_all_references
         )
     elif args.rich:
         console = VerboseConsole(is_verbose=args.verbose)
@@ -646,7 +672,8 @@ def _run_multi_collection_query(args, query):
             system_info=system_info,
             preview_bytes=args.preview_bytes,
             verbose=args.verbose,
-            reranking_enabled=results["metadata"]["reranking_enabled"]
+            reranking_enabled=results["metadata"]["reranking_enabled"],
+            show_all_references=args.show_all_references
         )
     else:
         display_results(
@@ -657,7 +684,8 @@ def _run_multi_collection_query(args, query):
             llm_info=system_info["llm_info"],
             preview_bytes=args.preview_bytes,
             verbose=args.verbose,
-            reranking_enabled=results["metadata"]["reranking_enabled"]
+            reranking_enabled=results["metadata"]["reranking_enabled"],
+            show_all_references=args.show_all_references
         )
 
 
@@ -891,7 +919,8 @@ def main():
                 system_info=system_info,
                 preview_bytes=args.preview_bytes,
                 verbose=original_verbose,  # Use original verbose setting
-                reranking_enabled=results["metadata"]["reranking_enabled"]
+                reranking_enabled=results["metadata"]["reranking_enabled"],
+                show_all_references=args.show_all_references
             )
         elif args.rich:
             # Use rich formatting with VerboseConsole
@@ -904,7 +933,8 @@ def main():
                 system_info=system_info,
                 preview_bytes=args.preview_bytes,
                 verbose=args.verbose,
-                reranking_enabled=results["metadata"]["reranking_enabled"]
+                reranking_enabled=results["metadata"]["reranking_enabled"],
+                show_all_references=args.show_all_references
             )
         else:
             # Use standard formatting
@@ -916,7 +946,8 @@ def main():
                 llm_info=system_info["llm_info"],
                 preview_bytes=args.preview_bytes,
                 verbose=args.verbose,
-                reranking_enabled=results["metadata"]["reranking_enabled"]
+                reranking_enabled=results["metadata"]["reranking_enabled"],
+                show_all_references=args.show_all_references
             )
         
     except Exception as e:
