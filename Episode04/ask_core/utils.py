@@ -186,15 +186,30 @@ def create_expanded_document(vectorstore, source: str, range_info: Dict, total_c
 def display_results(query: str, docs_with_scores: List[Tuple[Document, float]], 
                    answer: str, store_info: dict, llm_info: dict, 
                    preview_bytes: int = 0, verbose: bool = False, 
-                   reranking_enabled: bool = False):
+                   reranking_enabled: bool = False, show_all_references: bool = False):
     """Display search results in the original ask.py format."""
     # Main answer output (like original ask.py)
     print(f"\nAnswer: {answer}")
     
+    # Filter references to only contributing ones unless --show-all-references is used
+    display_docs = docs_with_scores
+    if not show_all_references and docs_with_scores:
+        from .reference_filter import ReferenceFilter
+        filter = ReferenceFilter()
+        display_docs = filter.filter_contributing_references(answer, docs_with_scores, verbose=verbose)
+    
     # Show source documents with similarity scores (like original ask.py)
-    if docs_with_scores:
-        print(f"\nReferences: {len(docs_with_scores)} documents")
-        for i, (doc, score) in enumerate(docs_with_scores, 1):
+    if display_docs:
+        if show_all_references:
+            print(f"\nReferences: {len(display_docs)} documents (all retrieved)")
+        else:
+            filtered_count = len(docs_with_scores) - len(display_docs)
+            if filtered_count > 0:
+                print(f"\nReferences: {len(display_docs)} documents (filtered out {filtered_count} non-contributing)")
+            else:
+                print(f"\nReferences: {len(display_docs)} documents")
+        
+        for i, (doc, score) in enumerate(display_docs, 1):
             doc_id = doc.metadata.get('doc_id', 'unknown')
             source = doc.metadata.get('source', 'unknown')
             
