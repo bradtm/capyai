@@ -111,7 +111,7 @@ def analyze_chroma_index(chroma_path, collection_name, num_entries=3, truncate_c
     try:
         results = collection.get(
             include=['metadatas', 'documents'],
-            limit=total_docs if total_docs < 10000 else 10000  # Limit to prevent memory issues
+            # limit=total_docs if total_docs < 10000 else 10000  # Limit to prevent memory issues
         )
         
         documents = results.get('documents', [])
