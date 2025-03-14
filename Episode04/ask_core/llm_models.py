@@ -80,7 +80,28 @@ class LLMManager:
                 model_name=self.model_name
             )
         except Exception as e:
-            print(f"Error initializing Ollama LLM: {e}")
+            # Provide user-friendly Ollama error messages
+            error_str = str(e).lower()
+            if "404" in error_str or "not found" in error_str:
+                available_models = self._get_ollama_models()
+                if available_models:
+                    models_list = ", ".join(available_models[:5])
+                    more_text = f" (and {len(available_models) - 5} more)" if len(available_models) > 5 else ""
+                    suggestions = self._suggest_similar_models(available_models)
+                    print(f"Error: Ollama model '{self.model_name}' not found locally.")
+                    print(f"Available models: {models_list}{more_text}{suggestions}")
+                    print(f"To download the model: ollama pull {self.model_name}")
+                    print(f"To list all models: ollama list")
+                else:
+                    print(f"Error: Ollama model '{self.model_name}' not found locally.")
+                    print(f"To download the model: ollama pull {self.model_name}")
+                    print(f"Make sure Ollama is running: ollama serve")
+            elif "connection" in error_str or "refused" in error_str:
+                print(f"Error: Cannot connect to Ollama server.")
+                print(f"Make sure Ollama is running: ollama serve")
+            else:
+                print(f"Error initializing Ollama LLM: {e}")
+            
             print("Falling back to OpenAI...")
             self._setup_openai_llm()
     
@@ -103,30 +124,103 @@ Answer based ONLY on the context above:"""
 
         if self.llm is not None:
             # Use modular LLM system - call generate method directly
-            if self.llm_type in ["huggingface", "ollama"]:
-                # Use more direct template for local models
-                direct_template = """Based on the following context, answer the question. If the answer is not in the context, say "I don't know".
+            try:
+                if self.llm_type in ["huggingface", "ollama"]:
+                    # Use more direct template for local models
+                    direct_template = """Based on the following context, answer the question. If the answer is not in the context, say "I don't know".
 
 Context: {context}
 
 Question: {question}
 
 Answer:"""
-                formatted_prompt = direct_template.format(context=context, question=question)
-                response = self.llm.generate(formatted_prompt)
-                # Extract content if it's an LLMResponse object
-                return response.content if hasattr(response, 'content') else str(response)
-            else:
-                # For OpenAI with modular LLM, use direct generation
-                formatted_prompt = template.format(context=context, question=question)
-                response = self.llm.generate(formatted_prompt)
-                # Extract content if it's an LLMResponse object
-                return response.content if hasattr(response, 'content') else str(response)
+                    formatted_prompt = direct_template.format(context=context, question=question)
+                    response = self.llm.generate(formatted_prompt)
+                    # Extract content if it's an LLMResponse object
+                    return response.content if hasattr(response, 'content') else str(response)
+                else:
+                    # For OpenAI with modular LLM, use direct generation
+                    formatted_prompt = template.format(context=context, question=question)
+                    response = self.llm.generate(formatted_prompt)
+                    # Extract content if it's an LLMResponse object
+                    return response.content if hasattr(response, 'content') else str(response)
+            except Exception as e:
+                # Handle Ollama-specific errors with user-friendly messages
+                if self.llm_type == "ollama":
+                    error_str = str(e).lower()
+                    if "404" in error_str or "not found" in error_str:
+                        available_models = self._get_ollama_models()
+                        if available_models:
+                            models_list = ", ".join(available_models[:5])  # Show first 5 models
+                            more_text = f" (and {len(available_models) - 5} more)" if len(available_models) > 5 else ""
+                            suggestions = self._suggest_similar_models(available_models)
+                            raise RuntimeError(
+                                f"Ollama model '{self.model_name}' not found locally.\n"
+                                f"Available models: {models_list}{more_text}{suggestions}\n"
+                                f"To download a model: ollama pull {self.model_name}\n"
+                                f"To list all models: ollama list"
+                            )
+                        else:
+                            raise RuntimeError(
+                                f"Ollama model '{self.model_name}' not found locally.\n"
+                                f"To download the model: ollama pull {self.model_name}\n"
+                                f"To list available models: ollama list\n"
+                                f"Make sure Ollama is running: ollama serve"
+                            )
+                    elif "connection" in error_str or "refused" in error_str:
+                        raise RuntimeError(
+                            f"Cannot connect to Ollama server.\n"
+                            f"Make sure Ollama is running: ollama serve\n"
+                            f"Or check if Ollama is running on a different port."
+                        )
+                # Re-raise other errors as-is
+                raise
         else:
             # Legacy ChatOpenAI
             prompt = ChatPromptTemplate.from_template(template)
             chain = prompt | self.model | StrOutputParser()
             return chain.invoke({"context": context, "question": question})
+    
+    def _get_ollama_models(self) -> list:
+        """Get list of available Ollama models."""
+        try:
+            import requests
+            response = requests.get("http://localhost:11434/api/tags", timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                return [model["name"] for model in data.get("models", [])]
+        except Exception:
+            # If we can't get models list, return empty list
+            pass
+        return []
+    
+    def _suggest_similar_models(self, available_models: list) -> str:
+        """Suggest similar model names based on the requested model."""
+        if not available_models:
+            return ""
+        
+        model_lower = self.model_name.lower()
+        suggestions = []
+        
+        # Look for models that contain part of the requested name
+        for model in available_models:
+            model_name_lower = model.lower()
+            if any(part in model_name_lower for part in model_lower.split() if len(part) > 2):
+                suggestions.append(model)
+        
+        # If no similar matches, suggest common models
+        if not suggestions:
+            common_patterns = ["llama", "gemma", "mistral", "phi", "qwen"]
+            for pattern in common_patterns:
+                matches = [m for m in available_models if pattern in m.lower()]
+                suggestions.extend(matches[:2])  # Add up to 2 matches per pattern
+        
+        if suggestions:
+            # Remove duplicates and limit suggestions
+            unique_suggestions = list(dict.fromkeys(suggestions))[:3]
+            return f"\nSimilar available models: {', '.join(unique_suggestions)}"
+        
+        return ""
     
     def get_model_info(self) -> dict:
         """Get information about the current LLM."""
