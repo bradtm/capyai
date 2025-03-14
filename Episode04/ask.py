@@ -195,14 +195,22 @@ def _display_results_rich(console, query, docs_with_scores, answer, system_info,
         llm_info = system_info["llm_info"]
         embedding_model = system_info["embedding_model"]
         
+        # Build reranker info with device information
+        reranker_text = ""
+        if reranking_enabled and "reranker_info" in system_info:
+            reranker_info = system_info["reranker_info"]
+            reranker_type = reranker_info.get('reranker_type', 'N/A')
+            device = reranker_info.get('device', 'N/A')
+            reranker_text = f"Reranker: {reranker_type} (device: {device})\n"
+        
         system_panel = Panel(
             f"Store Type: {store_info['store_type']}\n"
             f"Store Path: {store_info.get('store_path', 'N/A')}\n"
-            f"Documents: {store_info.get('total_documents', 'N/A')}\n"
+            f"Documents: {store_info.get('document_count', store_info.get('total_documents', 'N/A'))}\n"
             f"Embedding Model: {embedding_model}\n"
             f"LLM Type: {llm_info['llm_type']}\n"
-            f"LLM Model: {llm_info.get('model', llm_info.get('llm_model', 'N/A'))}\n" +
-            (f"Reranker: {system_info.get('reranker_info', {}).get('reranker_type', 'N/A')}" if reranking_enabled else ""),
+            f"LLM Model: {llm_info.get('model_name', llm_info.get('model', llm_info.get('llm_model', 'N/A')))}\n" +
+            reranker_text,
             title="System Info",
             title_align="left",
             border_style="blue"
@@ -270,14 +278,15 @@ def _display_results_json(query, docs_with_scores, answer, system_info,
         result["system_info"] = {
             "store_type": system_info["store_info"]["store_type"],
             "store_path": system_info["store_info"].get("store_path", "N/A"),
-            "total_documents": system_info["store_info"].get("total_documents", "N/A"),
+            "total_documents": system_info["store_info"].get("document_count", system_info["store_info"].get("total_documents", "N/A")),
             "embedding_model": system_info["embedding_model"],
             "llm_type": system_info["llm_info"]["llm_type"],
-            "llm_model": system_info["llm_info"].get("model", system_info["llm_info"].get("llm_model", "N/A"))
+            "llm_model": system_info["llm_info"].get("model_name", system_info["llm_info"].get("model", system_info["llm_info"].get("llm_model", "N/A")))
         }
         
         if reranking_enabled and "reranker_info" in system_info:
             result["system_info"]["reranker_type"] = system_info["reranker_info"].get("reranker_type", "N/A")
+            result["system_info"]["reranker_device"] = system_info["reranker_info"].get("device", "N/A")
     
     print(json.dumps(result, indent=2, ensure_ascii=False))
 
@@ -316,6 +325,7 @@ def _compare_models(args, query):
             enable_reranking=args.rerank,
             reranker_type=args.rerank_type,
             reranker_model=args.rerank_model,
+            reranker_device=None if args.device == "auto" else args.device,
             expand_context=args.expand_context,
             use_chunks_only=args.use_chunks_only,
             enable_answer_validation=not args.no_validation,
@@ -366,6 +376,7 @@ def _compare_reranking(args, query):
             enable_reranking=enable_rerank,
             reranker_type=args.rerank_type,
             reranker_model=args.rerank_model,
+            reranker_device=None if args.device == "auto" else args.device,
             expand_context=args.expand_context,
             use_chunks_only=args.use_chunks_only,
             enable_answer_validation=not args.no_validation,
@@ -428,6 +439,7 @@ def _compare_k_values(args, query):
             enable_reranking=args.rerank and kk_val != k_val,  # Enable reranking if kk specified
             reranker_type=args.rerank_type,
             reranker_model=args.rerank_model,
+            reranker_device=None if args.device == "auto" else args.device,
             expand_context=args.expand_context,
             use_chunks_only=args.use_chunks_only,
             enable_answer_validation=not args.no_validation,
@@ -552,6 +564,7 @@ def _run_multi_collection_query(args, query):
                 enable_reranking=False,  # Disable per-collection reranking
                 reranker_type=args.rerank_type,
                 reranker_model=args.rerank_model,
+                reranker_device=None if args.device == "auto" else args.device,
                 expand_context=args.expand_context,
                 use_chunks_only=args.use_chunks_only,
                 enable_answer_validation=not args.no_validation,
@@ -604,6 +617,7 @@ def _run_multi_collection_query(args, query):
             enable_reranking=True,  # Enable reranking
             reranker_type=args.rerank_type,
             reranker_model=args.rerank_model,
+            reranker_device=None if args.device == "auto" else args.device,
             expand_context=args.expand_context,
             use_chunks_only=args.use_chunks_only,
             enable_answer_validation=not args.no_validation,
@@ -872,6 +886,7 @@ def main():
             enable_reranking=args.rerank,
             reranker_type=args.rerank_type,
             reranker_model=args.rerank_model,
+            reranker_device=None if args.device == "auto" else args.device,
             expand_context=args.expand_context,
             use_chunks_only=args.use_chunks_only,
             enable_answer_validation=not args.no_validation,
