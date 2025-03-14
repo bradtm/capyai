@@ -18,9 +18,9 @@ class QASystem:
     def __init__(self, store_type: str = "faiss", embedding_model: str = "text-embedding-3-small",
                  llm_type: str = "openai", llm_model: str = "gpt-3.5-turbo",
                  enable_reranking: bool = False, reranker_type: str = "huggingface",
-                 reranker_model: str = "quality", expand_context: int = 2, 
-                 use_chunks_only: bool = False, enable_answer_validation: bool = True,
-                 **store_kwargs):
+                 reranker_model: str = "quality", reranker_device: Optional[str] = None,
+                 expand_context: int = 2, use_chunks_only: bool = False, 
+                 enable_answer_validation: bool = True, **store_kwargs):
         """
         Initialize the QA system with all components.
         
@@ -32,6 +32,7 @@ class QASystem:
             enable_reranking: Whether to enable reranking
             reranker_type: Type of reranker
             reranker_model: Reranker model name
+            reranker_device: Device for reranking models ("cpu", "cuda", "mps", None for auto-detect)
             expand_context: Number of chunks to expand before/after each match (0 to disable)
             use_chunks_only: Whether to disable context expansion
             enable_answer_validation: Whether to enable answer validation against context
@@ -73,7 +74,7 @@ class QASystem:
         if enable_reranking:
             deps = check_reranking_dependencies()
             if deps["reranking_core_available"]:
-                self.reranker = RerankerManager(reranker_type, reranker_model)
+                self.reranker = RerankerManager(reranker_type, reranker_model, reranker_device)
             else:
                 raise RuntimeError(deps["error_message"])
         
