@@ -265,7 +265,8 @@ def print_system_info(store_info: dict, llm_info: dict, embedding_model: str,
     print(f"LLM Model: {llm_info.get('model_name')}")
     
     if reranker_info and reranker_info.get('available'):
-        print(f"Reranker: {reranker_info.get('reranker_type')} ({reranker_info.get('model_name')})")
+        device = reranker_info.get('device', 'N/A')
+        print(f"Reranker: {reranker_info.get('reranker_type')} ({reranker_info.get('model_name')}) [device: {device}]")
 
 
 def validate_environment_variables() -> dict:
