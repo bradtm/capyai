@@ -709,7 +709,7 @@ class OllamaReranker(BaseReranker):
                 else:
                     # Fallback: use response length as relevance indicator
                     return min(1.0, len(response_text) / 100.0)
-            except:
+            except Exception:
                 # Final fallback
                 return 0.5
                 
