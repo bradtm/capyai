@@ -4,7 +4,7 @@ Modular LLM implementation supporting OpenAI and HuggingFace models.
 
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any, Optional
 from dataclasses import dataclass
 
 # OpenAI imports
@@ -25,7 +25,6 @@ except ImportError:
 # Ollama imports
 try:
     import requests
-    import json
     OLLAMA_AVAILABLE = True
 except ImportError:
     OLLAMA_AVAILABLE = False
