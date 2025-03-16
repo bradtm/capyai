@@ -1162,7 +1162,6 @@ def generate_visualizations(results, metrics, output_file=None):
         ax_rerank3 = fig_rerank.add_subplot(133)
         if rerank_scores_success and rerank_scores_failure:
             # Calculate precision/recall at different thresholds
-            all_scores = sorted(rerank_scores_success + rerank_scores_failure, reverse=True)
             thresholds = []
             precisions = []
 
