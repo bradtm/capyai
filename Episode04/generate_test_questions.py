@@ -46,13 +46,11 @@ import argparse
 import hashlib
 import re
 import requests
-import time
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from tqdm import tqdm
 
 # Import the same chunking mechanism as in popchroma.py
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 # Vector store imports
 from langchain_openai.embeddings import OpenAIEmbeddings
@@ -130,12 +128,12 @@ class OpenAIProvider(LLMProvider):
             # Many newer models don't support custom temperature or token limits
             try:
                 response = self.client.chat.completions.create(**completion_params)
-            except Exception as simple_error:
+            except Exception:
                 # Try adding max_completion_tokens for models that support it
                 try:
                     completion_params["max_completion_tokens"] = max_tokens
                     response = self.client.chat.completions.create(**completion_params)
-                except Exception as max_comp_error:
+                except Exception:
                     # Try max_tokens instead for older models
                     completion_params.pop("max_completion_tokens", None)
                     completion_params["max_tokens"] = max_tokens
@@ -1429,7 +1427,7 @@ def main():
             chroma_path=args.chroma_path,
             chroma_index=args.chroma_index
         )
-        print(f"Vector store loaded successfully")
+        print("Vector store loaded successfully")
     except Exception as e:
         print(f"Error loading vector store: {e}")
         sys.exit(1)
