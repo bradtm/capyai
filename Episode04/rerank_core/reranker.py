@@ -507,7 +507,7 @@ class MLXQwen3Reranker(BaseReranker):
                 
                 return prob_yes
                 
-        except Exception as e:
+        except Exception:
             # If MLX approach fails, try a simpler approach with content similarity
             # This is a fallback - you might want to use sentence similarity instead
             query_lower = query.lower()
@@ -713,7 +713,7 @@ class OllamaReranker(BaseReranker):
                 # Final fallback
                 return 0.5
                 
-        except Exception as e:
+        except Exception:
             # Return neutral score on error
             return 0.5
     
