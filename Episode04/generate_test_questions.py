@@ -87,7 +87,7 @@ except ImportError:
     OPENAI_AVAILABLE = False
 
 try:
-    from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM
+    from transformers import AutoTokenizer, AutoModelForCausalLM
     import torch
     HUGGINGFACE_AVAILABLE = True
 except ImportError:
@@ -152,7 +152,7 @@ class OpenAIProvider(LLMProvider):
             # Simple test call
             self.client.models.list()
             return True
-        except:
+        except Exception:
             return False
 
 
@@ -187,7 +187,7 @@ class OllamaProvider(LLMProvider):
         try:
             response = requests.get(f"{self.base_url}/api/version", timeout=5)
             return response.status_code == 200
-        except:
+        except Exception:
             return False
 
 
@@ -926,15 +926,8 @@ class QuestionGenerator:
             print("Warning: LLM is not available. Falling back to rule-based questions.")
             return self.generate_fallback_question(passage, chunk)
 
-        # Extract central sentences if enabled
+        # Extract sentences for phrase detection
         sentences = re.split(r'(?<=[.!?])\s+', passage)
-        if len(sentences) > 4 and self.central_content_focus:
-            start_idx = len(sentences) // 4
-            end_idx = start_idx + len(sentences) // 2
-            central_sentences = sentences[start_idx:end_idx]
-            central_text = " ".join(central_sentences)
-        else:
-            central_text = passage
 
         # Capture unique or distinguishing phrases from the passage
         unique_phrases = []
