@@ -26,10 +26,9 @@ import re
 import argparse
 import hashlib
 import datetime
-from typing import List, Optional
-from urllib.parse import urlparse, urljoin
+from typing import List
+from urllib.parse import urlparse
 from bs4 import BeautifulSoup
-from pathlib import Path
 from dotenv import load_dotenv
 from tqdm import tqdm
 
@@ -400,7 +399,7 @@ class UniversalRAGProcessor:
                 except Exception as e:
                     print(f"*** Warning: Could not load index metadata: {e} ***")
         else:
-            print(f"*** No existing FAISS index found. Will create new index ***")
+            print("*** No existing FAISS index found. Will create new index ***")
             self.vectorstore = None
         
         self.store_path = faiss_path
@@ -764,7 +763,7 @@ class UniversalRAGProcessor:
         
         if self.vectorstore is None:
             # Create new FAISS index
-            print(f"*** Creating new FAISS index ***")
+            print("*** Creating new FAISS index ***")
             
             # Extract data
             texts = [doc["page_content"] for doc in docs_with_ids]
@@ -779,7 +778,7 @@ class UniversalRAGProcessor:
             print("✓ FAISS index creation completed")
         else:
             # Check for existing documents and filter out duplicates
-            print(f"*** Checking for existing documents in FAISS index ***")
+            print("*** Checking for existing documents in FAISS index ***")
             existing_ids = set()
             if hasattr(self.vectorstore, 'docstore') and hasattr(self.vectorstore.docstore, '_dict'):
                 existing_ids = set(self.vectorstore.docstore._dict.keys())
@@ -869,7 +868,7 @@ class UniversalRAGProcessor:
                     raise Exception("Index did not become available within 10 seconds.")
             
             # Check for existing documents in Pinecone
-            print(f"*** Checking for existing documents in Pinecone index ***")
+            print("*** Checking for existing documents in Pinecone index ***")
             
             docs_with_ids = [
                 {
@@ -970,7 +969,7 @@ class UniversalRAGProcessor:
     
     def _save_to_chroma(self):
         """Save documents to Chroma"""
-        print(f"*** Adding documents to Chroma collection ***")
+        print("*** Adding documents to Chroma collection ***")
         
         # Prepare documents for batch processing
         docs_to_add = []

@@ -19,8 +19,7 @@ from ask_core.qa_system import QASystem
 from ask_core.utils import (
     display_results, 
     validate_environment_variables, 
-    get_store_config,
-    print_usage_examples
+    get_store_config
 )
 from ask_core.rerankers import check_reranking_dependencies
 
@@ -132,7 +131,6 @@ def _display_results_rich(console, query, docs_with_scores, answer, system_info,
                          preview_bytes=0, verbose=False, reranking_enabled=False, show_all_references=False):
     """Display results using rich formatting similar to cask.py."""
     from rich.panel import Panel
-    from rich.markdown import Markdown
     
     # Display the answer in a panel
     answer_panel = Panel(
@@ -498,7 +496,6 @@ def _display_comparison_results_standard(results, title):
 def _display_comparison_results_rich(results, title):
     """Display comparison results with rich formatting."""
     from rich.panel import Panel
-    from rich.table import Table
     from rich.console import Console
     
     console = Console()
@@ -785,7 +782,7 @@ def _display_multi_collection_rerank_details(collection_results, all_docs_with_s
             print(f"  {i:2d}. N/A ↗️ [{collection}] {source_display}{chunk_info}{position_info}")
     
     # Show distribution
-    print(f"\nCollection Distribution in Final Results:")
+    print("\nCollection Distribution in Final Results:")
     for collection, count in collection_count.items():
         percentage = (count / len(reranked_docs)) * 100
         print(f"- {collection}: {count} documents ({percentage:.0f}%)")
