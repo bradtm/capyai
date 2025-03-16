@@ -131,7 +131,7 @@ class RerankerManager:
         if RERANKING_AVAILABLE:
             try:
                 info["available_models"] = get_available_models()
-            except:
+            except Exception:
                 info["available_models"] = "unknown"
         
         return info
