@@ -124,7 +124,7 @@ class HuggingFaceReranker(BaseReranker):
                 self._model = CrossEncoder(self.model_name, device=self.device, trust_remote_code=True)
                 self._is_loaded = True
                 if verbose:
-                    print(f"*** Reranker model loaded successfully ***")
+                    print("*** Reranker model loaded successfully ***")
             except Exception as e:
                 raise RuntimeError(f"Failed to load reranker model {self.model_name}: {e}")
     
@@ -307,7 +307,7 @@ class Qwen3Reranker(BaseReranker):
                 self._is_loaded = True
                 
                 if verbose:
-                    print(f"*** Qwen3 reranker model loaded successfully ***")
+                    print("*** Qwen3 reranker model loaded successfully ***")
             except Exception as e:
                 raise RuntimeError(f"Failed to load Qwen3 reranker model {self.model_name}: {e}")
     
@@ -470,7 +470,7 @@ class MLXQwen3Reranker(BaseReranker):
                 self._is_loaded = True
                 
                 if verbose:
-                    print(f"*** MLX Qwen3 reranker loaded successfully on Apple Silicon ***")
+                    print("*** MLX Qwen3 reranker loaded successfully on Apple Silicon ***")
             except Exception as e:
                 raise RuntimeError(f"Failed to load MLX Qwen3 reranker {self.model_name}: {e}")
     
