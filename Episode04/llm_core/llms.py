@@ -115,7 +115,7 @@ class OpenAILLM(BaseLLM):
                 # Some models only support default temperature
                 try:
                     openai_kwargs['temperature'] = kwargs['temperature']
-                except:
+                except Exception:
                     pass  # Skip temperature if not supported
                     
             if 'max_tokens' in kwargs:
