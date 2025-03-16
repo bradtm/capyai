@@ -98,7 +98,7 @@ class RerankerManager:
         )
         
         print("\n*** RERANKING RESULTS ***")
-        print(f"Original → New | Original Score → Rerank Score | Doc ID")
+        print("Original → New | Original Score → Rerank Score | Doc ID")
         print("-" * 120)
         
         for result in reranked_results:
