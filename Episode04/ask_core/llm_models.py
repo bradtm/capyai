@@ -91,7 +91,7 @@ class LLMManager:
                     print(f"Error: Ollama model '{self.model_name}' not found locally.")
                     print(f"Available models: {models_list}{more_text}{suggestions}")
                     print(f"To download the model: ollama pull {self.model_name}")
-                    print(f"To list all models: ollama list")
+                    print("To list all models: ollama list")
                 else:
                     print(f"Error: Ollama model '{self.model_name}' not found locally.")
                     print(f"To download the model: ollama pull {self.model_name}")
