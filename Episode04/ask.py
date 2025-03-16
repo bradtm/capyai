@@ -25,7 +25,7 @@ from ask_core.rerankers import check_reranking_dependencies
 
 # Optional rich formatting imports
 try:
-    from cask_core.utils import VerboseConsole, display_results as rich_display_results
+    from cask_core.utils import VerboseConsole
     RICH_AVAILABLE = True
 except ImportError:
     RICH_AVAILABLE = False

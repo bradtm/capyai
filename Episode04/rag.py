@@ -327,7 +327,7 @@ def is_url(string):
     try:
         result = urlparse(string)
         return all([result.scheme, result.netloc])
-    except:
+    except Exception:
         return False
 
 
@@ -461,7 +461,7 @@ class UniversalRAGProcessor:
         try:
             collection = client.get_collection(name=index_name)
             print(f"*** Found existing Chroma collection: {index_name} ***")
-        except:
+        except Exception:
             collection = client.create_collection(name=index_name, metadata=collection_metadata)
             print(f"*** Created new Chroma collection: {index_name} ***")
         
@@ -918,7 +918,7 @@ class UniversalRAGProcessor:
                 
                 # Show progress bar during bulk upload
                 with tqdm(total=1, desc="Adding to Pinecone") as pbar:
-                    vectorstore = PineconeVectorStore.from_texts(
+                    PineconeVectorStore.from_texts(
                         texts=[doc["page_content"] for doc in docs_to_add],
                         embedding=self.embeddings,
                         metadatas=[doc["metadata"] for doc in docs_to_add],
