@@ -21,7 +21,6 @@ load_dotenv()
 class OllamaEmbeddings:
     """Ollama embeddings using local models."""
     def __init__(self, model: str = "bge-m3", base_url: str = "http://localhost:11434"):
-        import requests
         self.model = model
         self.base_url = base_url.rstrip('/')
 
@@ -99,7 +98,7 @@ def analyze_chroma_index(chroma_path, collection_name, num_entries=3, truncate_c
     print(f"Document store contains {total_docs:,} chunks")
     
     if metadata:
-        print(f"\nCOLLECTION METADATA:")
+        print("\nCOLLECTION METADATA:")
         for key, value in sorted(metadata.items()):
             print(f"   {key}: {value}")
     
@@ -154,12 +153,12 @@ def analyze_chroma_index(chroma_path, collection_name, num_entries=3, truncate_c
                         
                         metadata = metadatas[i] if i < len(metadatas) and metadatas[i] else {}
                         if metadata:
-                            print(f"   Metadata:")
+                            print("   Metadata:")
                             # Show all metadata fields, sorted for consistency
                             for key, value in sorted(metadata.items()):
                                 print(f"      {key}: {value}")
                         else:
-                            print(f"   Metadata: None")
+                            print("   Metadata: None")
                         
                         document = documents[i] if i < len(documents) else ""
                         if document:
@@ -173,7 +172,7 @@ def analyze_chroma_index(chroma_path, collection_name, num_entries=3, truncate_c
                                 display_content = display_content.replace('\n', ' ').replace('\r', ' ')
                             print(f"   Content: {display_content}")
                         else:
-                            print(f"   Content: None")
+                            print("   Content: None")
         else:
             print("No documents found in collection")
             
@@ -183,7 +182,7 @@ def analyze_chroma_index(chroma_path, collection_name, num_entries=3, truncate_c
 def test_search(chroma_path, collection_name, query="test search"):
     """Test search functionality on the Chroma index"""
     
-    print(f"\nSEARCH TEST")
+    print("\nSEARCH TEST")
     print("-" * len('SEARCH TEST'))
     
     try:

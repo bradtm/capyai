@@ -48,7 +48,6 @@ def analyze_faiss_index(faiss_path, num_entries=3, truncate_content=True, keys_o
 
 
     total_docs = vectorstore.index.ntotal
-    embedding_dim = vectorstore.index.d
     
     print(f"Index: {os.path.basename(faiss_path)}")
     print(f"Document store contains {total_docs:,} chunks")
@@ -59,7 +58,7 @@ def analyze_faiss_index(faiss_path, num_entries=3, truncate_content=True, keys_o
         try:
             with open(metadata_path, 'r') as f:
                 metadata = json.load(f)
-                print(f"\nINDEX METADATA:")
+                print("\nINDEX METADATA:")
                 for key, value in sorted(metadata.items()):
                     print(f"   {key}: {value}")
         except Exception as e:
@@ -111,12 +110,12 @@ def analyze_faiss_index(faiss_path, num_entries=3, truncate_content=True, keys_o
                         print(f"   Key: {doc_key}")
                         
                         if hasattr(doc, 'metadata') and doc.metadata:
-                            print(f"   Metadata:")
+                            print("   Metadata:")
                             # Show all metadata fields, sorted for consistency
                             for key, value in sorted(doc.metadata.items()):
                                 print(f"      {key}: {value}")
                         else:
-                            print(f"   Metadata: None")
+                            print("   Metadata: None")
                         
                         if hasattr(doc, 'page_content'):
                             content = doc.page_content.strip()
@@ -129,7 +128,7 @@ def analyze_faiss_index(faiss_path, num_entries=3, truncate_content=True, keys_o
                                 display_content = display_content.replace('\n', ' ').replace('\r', ' ')
                             print(f"   Content: {display_content}")
                         else:
-                            print(f"   Content: None")
+                            print("   Content: None")
         else:
             print("No documents found in index")
     else:
@@ -139,7 +138,7 @@ def analyze_faiss_index(faiss_path, num_entries=3, truncate_content=True, keys_o
 def test_search(faiss_path, query="test search"):
     """Test search functionality on the FAISS index"""
     
-    print(f"\nSEARCH TEST")
+    print("\nSEARCH TEST")
     print("-" * len('SEARCH TEST'))
     
     try:
