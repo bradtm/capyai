@@ -95,10 +95,10 @@ class LLMManager:
                 else:
                     print(f"Error: Ollama model '{self.model_name}' not found locally.")
                     print(f"To download the model: ollama pull {self.model_name}")
-                    print(f"Make sure Ollama is running: ollama serve")
+                    print("Make sure Ollama is running: ollama serve")
             elif "connection" in error_str or "refused" in error_str:
-                print(f"Error: Cannot connect to Ollama server.")
-                print(f"Make sure Ollama is running: ollama serve")
+                print("Error: Cannot connect to Ollama server.")
+                print("Make sure Ollama is running: ollama serve")
             else:
                 print(f"Error initializing Ollama LLM: {e}")
             
@@ -169,9 +169,9 @@ Answer:"""
                             )
                     elif "connection" in error_str or "refused" in error_str:
                         raise RuntimeError(
-                            f"Cannot connect to Ollama server.\n"
-                            f"Make sure Ollama is running: ollama serve\n"
-                            f"Or check if Ollama is running on a different port."
+                            "Cannot connect to Ollama server.\n"
+                            "Make sure Ollama is running: ollama serve\n"
+                            "Or check if Ollama is running on a different port."
                         )
                 # Re-raise other errors as-is
                 raise

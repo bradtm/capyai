@@ -97,7 +97,7 @@ class RerankerManager:
             query, docs_with_scores, top_k=top_k, verbose=True
         )
         
-        print(f"\n*** RERANKING RESULTS ***")
+        print("\n*** RERANKING RESULTS ***")
         print(f"Original → New | Original Score → Rerank Score | Doc ID")
         print("-" * 120)
         

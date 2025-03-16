@@ -254,7 +254,7 @@ def print_system_info(store_info: dict, llm_info: dict, embedding_model: str,
     if not verbose:
         return
     
-    print(f"*** SYSTEM INFO ***")
+    print("*** SYSTEM INFO ***")
     print(f"Store Type: {store_info.get('store_type')}")
     print(f"Store Path: {store_info.get('store_path')}")
     if store_info.get('document_count', -1) >= 0:

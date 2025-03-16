@@ -54,7 +54,7 @@ class AnswerValidator:
         }
         
         if verbose:
-            print(f"*** Validating answer against context ***")
+            print("*** Validating answer against context ***")
         
         # Step 1: Quick confidence check
         confidence_score = self._check_answer_confidence(answer)
