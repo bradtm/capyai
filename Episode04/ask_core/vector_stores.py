@@ -1,7 +1,7 @@
 """Vector store implementations for the ask_core system."""
 
 import os
-from typing import List, Tuple, Optional, Any
+from typing import List, Tuple
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_community.vectorstores import FAISS

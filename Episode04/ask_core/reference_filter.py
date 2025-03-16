@@ -1,7 +1,7 @@
 """Reference filtering module to identify documents that actually contributed to the final answer."""
 
 import re
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple
 from langchain_core.documents import Document
 
 

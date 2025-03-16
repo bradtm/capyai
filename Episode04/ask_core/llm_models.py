@@ -1,7 +1,7 @@
 """LLM model providers for the ask_core system."""
 
 import os
-from typing import Optional, Any
+from typing import Optional
 from langchain_openai.chat_models import ChatOpenAI
 from langchain_core.output_parsers import StrOutputParser
 from langchain.prompts import ChatPromptTemplate

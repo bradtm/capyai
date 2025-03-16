@@ -2,7 +2,6 @@
 
 import re
 from typing import Tuple, Dict, Any, List, Optional
-from langchain_core.documents import Document
 from .llm_models import LLMManager
 
 

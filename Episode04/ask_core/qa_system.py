@@ -1,6 +1,5 @@
 """Main QA system orchestrator for the ask_core system."""
 
-import os
 from typing import List, Tuple, Optional, Dict, Any
 from langchain_core.documents import Document
 
