@@ -72,8 +72,7 @@ import json
 import argparse
 import requests
 import datetime
-import time
-from typing import List, Dict, Any, Tuple, Union, Optional
+from typing import List, Dict, Any, Tuple
 from tqdm import tqdm
 from collections import defaultdict
 import pandas as pd
@@ -134,13 +133,13 @@ class HuggingFaceReranker:
             import torch
             if torch.cuda.is_available():
                 device = "cuda"
-                print(f"Using CUDA GPU for reranking")
+                print("Using CUDA GPU for reranking")
             elif hasattr(torch, 'backends') and hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
                 device = "mps"  # Apple Silicon (M1/M2/M3) GPU
-                print(f"Using Apple Silicon MPS GPU for reranking")
+                print("Using Apple Silicon MPS GPU for reranking")
             else:
                 device = "cpu"
-                print(f"Using CPU for reranking (this may be slow)")
+                print("Using CPU for reranking (this may be slow)")
 
         try:
             # Load the cross-encoder model
@@ -449,7 +448,7 @@ def evaluate_retrieval_quality(vector_store_loader: VectorStoreLoader, questions
     rank_counts = defaultdict(int)
 
     print(f"Evaluating retrieval quality for {len(questions)} questions...")
-    print(f"Using question text as query")
+    print("Using question text as query")
     print(f"Top-k value: {top_k}")
     print(f"Embedding model: {vector_store_loader.embedding_model}")
     print(f"Reranking: {'Enabled' if use_reranking else 'Disabled'}")
@@ -771,18 +770,18 @@ def generate_report(results, metrics, output_file, embedding_model, top_k,
     report = []
     report.append("# Vector Search Quality Evaluation Report")
     report.append(f"\nEvaluation date: {datetime.datetime.now()}")
-    report.append(f"Query type: Question text")
+    report.append("Query type: Question text")
     report.append(f"Embedding model: {embedding_model}")
     report.append(f"Top-k value: {top_k}")
 
     # Add reranking info if enabled
     if metrics.get("reranking_enabled", False):
-        report.append(f"Reranking: Enabled")
+        report.append("Reranking: Enabled")
         report.append(f"Reranker type: {metrics.get('reranker_type', 'Unknown')}")
         report.append(f"Rerank model: {metrics.get('rerank_model', 'Unknown')}")
         report.append(f"Rerank top-n: {metrics.get('rerank_top_n', 'Unknown')}")
     else:
-        report.append(f"Reranking: Disabled")
+        report.append("Reranking: Disabled")
 
     report.append(
         f"Overlap threshold: {overlap_threshold if overlap_threshold > 0 else 'Disabled (using source match only)'}")
@@ -894,7 +893,7 @@ def generate_report(results, metrics, output_file, embedding_model, top_k,
 
                         # Show additional context for failed retrievals
                         if len(result["retrieved_chunks"]) > 1:
-                            report.append(f"\nOther top results:")
+                            report.append("\nOther top results:")
                             for idx, chunk in enumerate(result["retrieved_chunks"][1:4]):  # Show up to 3 more
                                 report.append(f"- Rank {chunk['rank']}, Source: {chunk['source_file']}, Overlap: {chunk['overlap_str']}")
 
