@@ -21,9 +21,7 @@ except ImportError:
     TRANSFORMERS_AVAILABLE = False
 
 try:
-    import mlx.core as mx
-    import mlx.nn as nn
-    from mlx_lm import load, generate
+    from mlx_lm import load
     MLX_AVAILABLE = True
 except ImportError:
     MLX_AVAILABLE = False
@@ -31,7 +29,6 @@ except ImportError:
 # Ollama imports
 try:
     import requests
-    import json
     OLLAMA_AVAILABLE = True
 except ImportError:
     OLLAMA_AVAILABLE = False
