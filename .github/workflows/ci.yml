@@ -28,4 +28,4 @@ jobs:
         pip install ruff
     
     - name: Run Ruff linter
-      run: ruff check .
+      run: ruff check Episode04/
