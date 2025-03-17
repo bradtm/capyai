@@ -1,4 +1,0 @@
-line-length = 88
-select = ["E", "F", "W", "I"]  # pycodestyle + pyflakes + isort
-ignore = ["E501"]  # Ignore line too long (if needed)
-
