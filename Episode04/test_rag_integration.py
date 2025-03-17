@@ -8,14 +8,11 @@ import sys
 import tempfile
 import shutil
 import subprocess
-import json
 import glob
-from pathlib import Path
 
 # Add the project root to the path so we can import rag
 sys.path.insert(0, os.path.dirname(__file__))
 
-import rag
 
 
 class TestRAGIntegration(unittest.TestCase):
@@ -130,7 +127,7 @@ class TestRAGIntegration(unittest.TestCase):
         self.test_audio_files = [os.path.basename(f) for f in audio_files]
         self.test_pdf_files = [os.path.basename(f) for f in pdf_files]
         
-        print(f"\nDiscovered files:")
+        print("\nDiscovered files:")
         print(f"  Audio files: {len(audio_files)}")
         print(f"  PDF files: {len(pdf_files)}")
         print(f"  Total files to process: {len(audio_files) + len(pdf_files)}")
@@ -147,7 +144,7 @@ class TestRAGIntegration(unittest.TestCase):
         
         # Run the RAG command with real-time output
         try:
-            print(f"Starting RAG processing...")
+            print("Starting RAG processing...")
             print("=" * 60)
             
             # Run with real-time output (no capture)
@@ -234,7 +231,7 @@ class TestRAGIntegration(unittest.TestCase):
                 print(f"   Last 5 missing: {missing_pdf_transcripts[-5:]}")
             
             # Debug: Show what files were actually processed
-            print(f"\nActual files processed:")
+            print("\nActual files processed:")
             print(f"  Total transcript files found: {len(transcript_files)}")
             print(f"  Expected audio files: {len(self.test_audio_files)}")
             print(f"  Expected PDF files: {len(self.test_pdf_files)}")
@@ -243,7 +240,7 @@ class TestRAGIntegration(unittest.TestCase):
             
             # Show some actual transcript filenames for debugging
             if transcript_files:
-                print(f"  Sample transcript files:")
+                print("  Sample transcript files:")
                 for i, tf in enumerate(transcript_files[:5]):
                     print(f"    {tf}")
                 if len(transcript_files) > 5:
@@ -270,7 +267,7 @@ class TestRAGIntegration(unittest.TestCase):
             # Note: since we removed capture_output, result.stdout won't exist
             # This check is removed for the real-time output version
             
-            print(f"✅ Integration test passed!")
+            print("✅ Integration test passed!")
             print(f"   - Processed {len(self.test_audio_files)} audio files")
             print(f"   - Processed {len(self.test_pdf_files)} PDF files") 
             print(f"   - Created {len(transcript_files)} total transcript files")
@@ -279,7 +276,7 @@ class TestRAGIntegration(unittest.TestCase):
             print(f"   - Non-empty transcripts: {non_empty_transcripts}")
             print(f"   - Created Chroma collection with {len(chroma_files)} files")
             
-        except subprocess.TimeoutExpired as e:
+        except subprocess.TimeoutExpired:
             self.fail(f"RAG command timed out after {actual_timeout/60:.1f} minutes ({actual_timeout} seconds)")
         except Exception as e:
             self.fail(f"RAG command failed with exception: {e}")
@@ -324,7 +321,7 @@ class TestRAGIntegration(unittest.TestCase):
         cmd.extend(audio_files)
         cmd.extend(pdf_files)
         
-        print(f"\nRunning incremental test (second run)...")
+        print("\nRunning incremental test (second run)...")
         print("=" * 40)
         result = subprocess.run(cmd, timeout=300)
         print("=" * 40)
