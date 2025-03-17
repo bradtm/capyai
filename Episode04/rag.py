@@ -326,7 +326,7 @@ def get_url_filename(url):
 def is_url(string):
     try:
         result = urlparse(string)
-        return all([result.scheme, result.netloc])
+        return all([result.scheme, result.netloc]) and result.scheme.lower() in ['http', 'https']
     except Exception:
         return False
 

@@ -119,9 +119,10 @@ class TestFileUtils(unittest.TestCase):
         result = rag.load_processed_files("/nonexistent/path.json")
         self.assertEqual(result, {})
     
+    @patch('os.path.exists', return_value=True)
     @patch('builtins.open', side_effect=IOError("Permission denied"))
     @patch('builtins.print')
-    def test_load_processed_files_error(self, mock_print, mock_open):
+    def test_load_processed_files_error(self, mock_print, mock_open, mock_exists):
         """Test loading processed files with read error."""
         result = rag.load_processed_files("test.json")
         self.assertEqual(result, {})
