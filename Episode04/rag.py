@@ -974,12 +974,14 @@ class UniversalRAGProcessor:
         # Prepare documents for batch processing
         docs_to_add = []
         skipped_count = 0
+        seen_ids = set()  # Track IDs within current batch to prevent duplicates
+        duplicate_count = 0
         
         for doc in self.all_documents:
             # Use same content-based hash ID as FAISS and Pinecone for consistency
             chunk_id = doc.metadata["doc_id"]
             
-            # Check if chunk already exists
+            # Check if chunk already exists in Chroma
             existing = self.chroma_collection.get(
                 ids=[chunk_id],
                 include=[],
@@ -987,9 +989,20 @@ class UniversalRAGProcessor:
             
             if existing['ids']:
                 if self.args.verbose:
-                    print(f"*** Warning: Document ID '{chunk_id}' already exists, skipping ***")
+                    print(f"*** Warning: Document ID '{chunk_id}' already exists in Chroma, skipping ***")
+                    print(f"*** Document content: {doc.page_content} ***")
                 skipped_count += 1
+            elif chunk_id in seen_ids:
+                # Handle duplicates within the current batch
+                source_file = doc.metadata.get("source", "unknown")
+                print(f"*** Warning: Duplicate content detected - ID '{chunk_id}' from source '{source_file}', skipping duplicate ***")
+                if self.args.verbose:
+                    print(f"*** Document content: {doc.page_content} ***")
+                duplicate_count += 1
             else:
+                # Mark this ID as seen and add to batch
+                seen_ids.add(chunk_id)
+                
                 # Add metadata for Chroma
                 doc.metadata.update({
                     "embedding_model": self.model_info.name,
@@ -1015,13 +1028,28 @@ class UniversalRAGProcessor:
                     metadatas = [item[1] for item in batch]
                     ids = [item[2] for item in batch]
                     
+                    # Double-check for duplicates within this specific batch (additional safety)
+                    if len(set(ids)) != len(ids):
+                        print(f"*** Warning: Found {len(ids) - len(set(ids))} duplicate IDs within batch, deduplicating ***")
+                        # Remove duplicates while preserving order
+                        unique_batch = []
+                        batch_seen = set()
+                        for text, metadata, id_val in zip(texts, metadatas, ids):
+                            if id_val not in batch_seen:
+                                batch_seen.add(id_val)
+                                unique_batch.append((text, metadata, id_val))
+                        
+                        texts = [item[0] for item in unique_batch]
+                        metadatas = [item[1] for item in unique_batch]
+                        ids = [item[2] for item in unique_batch]
+                    
                     self.vectorstore.add_texts(
                         texts=texts,
                         metadatas=metadatas,
                         ids=ids
                     )
-                    added_count += len(batch)
-                    pbar.update(len(batch))
+                    added_count += len(ids)  # Use actual number of unique IDs added
+                    pbar.update(len(batch))  # Update by original batch size
                     
                 except Exception as e:
                     print(f"\nError adding batch: {e}")
@@ -1032,6 +1060,9 @@ class UniversalRAGProcessor:
         
         if skipped_count > 0:
             print(f"*** Skipped {skipped_count} existing documents ***")
+        
+        if duplicate_count > 0:
+            print(f"*** Skipped {duplicate_count} duplicate documents from current batch ***")
 
 
 def main():
