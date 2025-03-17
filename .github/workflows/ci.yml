@@ -50,4 +50,4 @@ jobs:
     - name: Run integration tests
       run: |
         cd Episode04
-        RAG_TEST_MAX_PDFS=999999 python3 test_rag_integration.py
+        RAG_TEST_MAX_PDFS=999999 python3 integration_test_rag.py
