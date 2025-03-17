@@ -3,8 +3,10 @@ name: CI
 on:
   push:
     branches: [ main ]
+    paths: [ 'Episode04/**' ]
   pull_request:
     branches: [ main ]
+    paths: [ 'Episode04/**' ]
 
 jobs:
   lint:
