@@ -8,8 +8,8 @@ import sys
 import json
 import tempfile
 import shutil
-from unittest.mock import patch, MagicMock, mock_open
-from urllib.parse import urlparse
+import requests
+from unittest.mock import patch, MagicMock
 
 # Add the project root to the path so we can import rag
 sys.path.insert(0, os.path.dirname(__file__))
