@@ -46,3 +46,8 @@ jobs:
       run: |
         cd Episode04
         python -m unittest discover -s . -p "test_*.py" -v
+    
+    - name: Run integration tests
+      run: |
+        cd Episode04
+        RAG_TEST_MAX_PDFS=999999 python3 test_rag_integration.py
