@@ -8,7 +8,6 @@ any problematic files with new downloads from arXiv.
 """
 
 import os
-import sys
 from pathlib import Path
 import requests
 import time
@@ -206,11 +205,11 @@ def main():
     print(f"Corrupt PDFs: {len(corrupt_pdfs)}")
     
     if corrupt_pdfs:
-        print(f"\nCorrupt PDF details:")
+        print("\nCorrupt PDF details:")
         for pdf_path, message in corrupt_pdfs:
             print(f"  - {pdf_path.name}: {message}")
         
-        print(f"\nAttempting to repair corrupt PDFs...")
+        print("\nAttempting to repair corrupt PDFs...")
         
         repaired = 0
         failed_repairs = []
@@ -221,7 +220,7 @@ def main():
             # Extract arXiv ID
             arxiv_id = extract_arxiv_id(pdf_path.name)
             if not arxiv_id:
-                print(f"  Cannot extract arXiv ID from filename")
+                print("  Cannot extract arXiv ID from filename")
                 failed_repairs.append(pdf_path.name)
                 continue
             
@@ -259,11 +258,11 @@ def main():
         print(f"Failed to repair: {len(failed_repairs)}")
         
         if failed_repairs:
-            print(f"\nStill problematic:")
+            print("\nStill problematic:")
             for filename in failed_repairs:
                 print(f"  - {filename}")
     else:
-        print(f"\nAll PDFs are valid!")
+        print("\nAll PDFs are valid!")
     
     # Final count
     final_pdf_files = list(pdf_dir.glob("*.pdf"))
