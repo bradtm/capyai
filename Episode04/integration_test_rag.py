@@ -102,7 +102,7 @@ class TestRAGIntegration(unittest.TestCase):
         rag_script = os.path.join(self.project_root, "rag.py")
         
         cmd = [
-            "python3", rag_script,
+            sys.executable, rag_script,
             "--store", "chroma",
             "--chroma-path", self.test_chroma_path,
             "--chroma-index", "test_mixed_content",
@@ -300,7 +300,7 @@ class TestRAGIntegration(unittest.TestCase):
         # Run the command again with both audio and PDF files
         rag_script = os.path.join(self.project_root, "rag.py")
         cmd = [
-            "python3", rag_script,
+            sys.executable, rag_script,
             "--store", "chroma",
             "--chroma-path", self.test_chroma_path,
             "--chroma-index", "test_mixed_content",
@@ -359,7 +359,7 @@ class TestRAGCommandLineInterface(unittest.TestCase):
         rag_script = os.path.join(self.project_root, "rag.py")
         
         result = subprocess.run(
-            ["python3", rag_script, "--help"],
+            [sys.executable, rag_script, "--help"],
             capture_output=True,
             text=True,
             timeout=30
@@ -374,7 +374,7 @@ class TestRAGCommandLineInterface(unittest.TestCase):
         rag_script = os.path.join(self.project_root, "rag.py")
         
         result = subprocess.run(
-            ["python3", rag_script, "--invalid-arg"],
+            [sys.executable, rag_script, "--invalid-arg"],
             capture_output=True,
             text=True,
             timeout=30
