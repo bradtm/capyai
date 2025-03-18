@@ -35,14 +35,14 @@ jobs:
     
     - name: Install dependencies
       run: |
-        echo "Installing dependencies with system Python..."
+        echo "Installing dependencies with GitHub Actions Python..."
         which python3
         python3 --version
         python3 -m pip install --upgrade pip
-        pip3 install ruff
-        pip3 install -r Episode04/requirements.txt
+        python3 -m pip install ruff
+        python3 -m pip install -r Episode04/requirements.txt
         echo "Verifying whisper installation..."
-        pip3 list | grep -i whisper || echo "Whisper not found in pip list"
+        python3 -m pip list | grep -i whisper || echo "Whisper not found in pip list"
         python3 -c "import whisper; print('Whisper import successful')" || echo "Whisper import failed"
     
     - name: Run Ruff linter
@@ -55,15 +55,16 @@ jobs:
     
     - name: Run integration tests
       run: |
-        # Add ffmpeg to PATH but keep system Python
+        # Add ffmpeg to PATH
         export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
         export HOMEBREW_PREFIX="/home/linuxbrew/.linuxbrew"
         export HOMEBREW_CELLAR="/home/linuxbrew/.linuxbrew/Cellar"
         export HOMEBREW_REPOSITORY="/home/linuxbrew/.linuxbrew/Homebrew"
         echo "Checking environment..."
-        # Use system python3 explicitly 
-        /usr/bin/python3 --version
-        /usr/bin/python3 -c "import whisper; print('whisper imported successfully')" || echo "whisper import failed"
+        # Use same python3 as dependency installation
+        which python3
+        python3 --version
+        python3 -c "import whisper; print('whisper imported successfully')" || echo "whisper import failed"
         which ffmpeg || echo "ffmpeg not found"
         cd Episode04
-        RAG_TEST_MAX_PDFS=999999 /usr/bin/python3 integration_test_rag.py
+        RAG_TEST_MAX_PDFS=999999 python3 integration_test_rag.py
