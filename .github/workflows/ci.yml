@@ -55,16 +55,17 @@ jobs:
     
     - name: Run integration tests
       run: |
-        # Add ffmpeg to PATH
+        # Add ffmpeg to PATH but preserve GitHub Actions Python
+        GITHUB_PYTHON=$(which python3)
         export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
         export HOMEBREW_PREFIX="/home/linuxbrew/.linuxbrew"
         export HOMEBREW_CELLAR="/home/linuxbrew/.linuxbrew/Cellar"
         export HOMEBREW_REPOSITORY="/home/linuxbrew/.linuxbrew/Homebrew"
         echo "Checking environment..."
-        # Use same python3 as dependency installation
-        which python3
-        python3 --version
-        python3 -c "import whisper; print('whisper imported successfully')" || echo "whisper import failed"
+        echo "GitHub Actions Python: $GITHUB_PYTHON"
+        echo "Current python3 (after PATH change): $(which python3)"
+        $GITHUB_PYTHON --version
+        $GITHUB_PYTHON -c "import whisper; print('whisper imported successfully')" || echo "whisper import failed"
         which ffmpeg || echo "ffmpeg not found"
         cd Episode04
-        RAG_TEST_MAX_PDFS=999999 python3 integration_test_rag.py
+        RAG_TEST_MAX_PDFS=999999 $GITHUB_PYTHON integration_test_rag.py
