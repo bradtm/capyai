@@ -7,12 +7,9 @@ This script downloads 250 publicly available AI research papers from arXiv
 that can be legally used for testing and research purposes.
 """
 
-import os
-import sys
 import time
 import requests
 import feedparser
-from urllib.parse import urljoin
 from pathlib import Path
 
 
