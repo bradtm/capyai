@@ -24,23 +24,60 @@ jobs:
       with:
         python-version: '3.12'
     
+    - name: Cache Homebrew
+      uses: actions/cache@v3
+      with:
+        path: |
+          /home/linuxbrew/.linuxbrew/Homebrew
+          /home/linuxbrew/.linuxbrew/Cellar
+          /home/linuxbrew/.linuxbrew/bin
+          /home/linuxbrew/.linuxbrew/lib
+          /home/linuxbrew/.linuxbrew/include
+        key: homebrew-${{ runner.os }}-${{ hashFiles('**/ci.yml') }}
+        restore-keys: |
+          homebrew-${{ runner.os }}-
+    
     - name: Install Homebrew
       run: |
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        if [ ! -f "/home/linuxbrew/.linuxbrew/bin/brew" ]; then
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        fi
         echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> ~/.bashrc
         eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
     
     - name: Install ffmpeg via Homebrew
       run: |
         eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-        brew install ffmpeg
+        if ! command -v ffmpeg &> /dev/null; then
+          brew install ffmpeg
+        fi
+    
+    - name: Cache Python packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: pip-${{ runner.os }}-${{ hashFiles('Episode04/requirements.txt') }}
+        restore-keys: |
+          pip-${{ runner.os }}-
+    
+    - name: Cache Ollama models
+      uses: actions/cache@v3
+      with:
+        path: ~/.ollama
+        key: ollama-models-${{ hashFiles('**/ci.yml') }}
+        restore-keys: |
+          ollama-models-
     
     - name: Install and start Ollama
       run: |
-        curl -fsSL https://ollama.ai/install.sh | sh
+        if ! command -v ollama &> /dev/null; then
+          curl -fsSL https://ollama.ai/install.sh | sh
+        fi
         ollama serve &
         sleep 10
-        ollama pull bge-m3
+        if ! ollama list | grep -q "bge-m3"; then
+          ollama pull bge-m3
+        fi
     
     - name: Install dependencies
       run: |
