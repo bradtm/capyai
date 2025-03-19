@@ -87,13 +87,11 @@ class TestRAGIntegration(unittest.TestCase):
         # Ensure we're in the right directory
         os.chdir(self.project_root)
         
-        # Clean up any existing test data
+        # Clean up Chroma data but preserve transcripts to avoid re-transcription
         if os.path.exists(self.test_chroma_path):
             shutil.rmtree(self.test_chroma_path)
-        if os.path.exists(self.test_transcript_dir):
-            shutil.rmtree(self.test_transcript_dir)
         
-        # Recreate transcript directory
+        # Create transcript directory if it doesn't exist (preserve existing transcripts)
         os.makedirs(self.test_transcript_dir, exist_ok=True)
     
     def test_rag_chroma_pipeline_full_integration(self):
@@ -148,9 +146,9 @@ class TestRAGIntegration(unittest.TestCase):
             print("=" * 60)
             
             # Run with real-time output (no capture)
-            # Increase timeout for large batches - estimate 5 seconds per PDF + base time
-            estimated_time = 600 + len(pdf_files) * 5  # 10 min base + 5s per PDF
-            actual_timeout = min(7200, estimated_time)  # Cap at 2 hours
+            # Increase timeout for large batches - account for slow CI Chroma insertion (~2.5s per document)
+            estimated_time = 1800 + len(pdf_files) * 120  # 30 min base + 2 min per PDF for CI environment
+            actual_timeout = min(5400, estimated_time)  # Cap at 1.5 hours
             
             print(f"Estimated processing time: {estimated_time/60:.1f} minutes")
             print(f"Using timeout: {actual_timeout/60:.1f} minutes")
