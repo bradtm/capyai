@@ -35,6 +35,13 @@ jobs:
         eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
         brew install ffmpeg
     
+    - name: Install and start Ollama
+      run: |
+        curl -fsSL https://ollama.ai/install.sh | sh
+        ollama serve &
+        sleep 10
+        ollama pull bge-m3
+    
     - name: Install dependencies
       run: |
         echo "Installing dependencies with GitHub Actions Python..."
