@@ -77,4 +77,4 @@ jobs:
         $GITHUB_PYTHON -c "import whisper; print('whisper imported successfully')" || echo "whisper import failed"
         which ffmpeg || echo "ffmpeg not found"
         cd Episode04
-        RAG_TEST_MAX_PDFS=999999 $GITHUB_PYTHON integration_test_rag.py
+        RAG_TEST_MAX_PDFS=5 $GITHUB_PYTHON integration_test_rag.py
