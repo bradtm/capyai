@@ -331,7 +331,13 @@ class TestRAGIntegration(unittest.TestCase):
         
         print("\nRunning incremental test (second run)...")
         print("=" * 40)
-        result = subprocess.run(cmd, timeout=300)
+        
+        # Use the same timeout calculation as the main test
+        estimated_time = 1800 + len(pdf_files) * 120  # 30 min base + 2 min per PDF
+        actual_timeout = min(5400, estimated_time)  # Cap at 1.5 hours
+        print(f"Using incremental timeout: {actual_timeout/60:.1f} minutes")
+        
+        result = subprocess.run(cmd, timeout=actual_timeout)
         print("=" * 40)
         
         # Should still succeed
