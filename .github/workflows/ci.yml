@@ -36,7 +36,8 @@ jobs:
         path: |
           /home/linuxbrew/.linuxbrew/Cellar/ffmpeg
           /home/linuxbrew/.linuxbrew/lib
-        key: homebrew-packages-${{ runner.os }}-ffmpeg-v1
+          /home/linuxbrew/.linuxbrew/var/homebrew/locks
+        key: homebrew-packages-${{ runner.os }}-ffmpeg-v2
         restore-keys: |
           homebrew-packages-${{ runner.os }}-
     
@@ -72,8 +73,11 @@ jobs:
       with:
         path: |
           ~/.cache/pip
-          /opt/hostedtoolcache/Python/3.12.11/x64/lib/python3.12/site-packages
-        key: python-packages-${{ runner.os }}-${{ hashFiles('Episode04/requirements.txt') }}-v1
+          /opt/hostedtoolcache/Python/3.12.11/x64/lib/python3.12/site-packages/whisper*
+          /opt/hostedtoolcache/Python/3.12.11/x64/lib/python3.12/site-packages/torch*
+          /opt/hostedtoolcache/Python/3.12.11/x64/lib/python3.12/site-packages/langchain*
+          /opt/hostedtoolcache/Python/3.12.11/x64/lib/python3.12/site-packages/chromadb*
+        key: python-packages-${{ runner.os }}-${{ hashFiles('Episode04/requirements.txt') }}-v2
         restore-keys: |
           python-packages-${{ runner.os }}-
     
