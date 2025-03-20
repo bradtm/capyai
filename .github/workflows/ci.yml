@@ -24,26 +24,21 @@ jobs:
       with:
         python-version: '3.12'
     
-    - name: Cache Homebrew
+    - name: Install Homebrew
+      run: |
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> ~/.bashrc
+        eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+    
+    - name: Cache Homebrew packages
       uses: actions/cache@v3
       with:
         path: |
-          /home/linuxbrew/.linuxbrew/Homebrew
-          /home/linuxbrew/.linuxbrew/Cellar
-          /home/linuxbrew/.linuxbrew/bin
+          /home/linuxbrew/.linuxbrew/Cellar/ffmpeg
           /home/linuxbrew/.linuxbrew/lib
-          /home/linuxbrew/.linuxbrew/include
-        key: homebrew-${{ runner.os }}-${{ hashFiles('**/ci.yml') }}
+        key: homebrew-packages-${{ runner.os }}-ffmpeg-v1
         restore-keys: |
-          homebrew-${{ runner.os }}-
-    
-    - name: Install Homebrew
-      run: |
-        if [ ! -f "/home/linuxbrew/.linuxbrew/bin/brew" ]; then
-          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-        fi
-        echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> ~/.bashrc
-        eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          homebrew-packages-${{ runner.os }}-
     
     - name: Install ffmpeg via Homebrew
       run: |
@@ -55,26 +50,29 @@ jobs:
     - name: Cache Python packages
       uses: actions/cache@v3
       with:
-        path: ~/.cache/pip
-        key: pip-${{ runner.os }}-${{ hashFiles('Episode04/requirements.txt') }}
+        path: |
+          ~/.cache/pip
+          /opt/hostedtoolcache/Python/3.12.11/x64/lib/python3.12/site-packages
+        key: python-packages-${{ runner.os }}-${{ hashFiles('Episode04/requirements.txt') }}-v1
         restore-keys: |
-          pip-${{ runner.os }}-
+          python-packages-${{ runner.os }}-
+    
+    - name: Install and start Ollama
+      run: |
+        curl -fsSL https://ollama.ai/install.sh | sh
+        ollama serve &
+        sleep 10
     
     - name: Cache Ollama models
       uses: actions/cache@v3
       with:
         path: ~/.ollama
-        key: ollama-models-${{ hashFiles('**/ci.yml') }}
+        key: ollama-models-bge-m3-v1
         restore-keys: |
           ollama-models-
     
-    - name: Install and start Ollama
+    - name: Pull BGE-M3 model
       run: |
-        if ! command -v ollama &> /dev/null; then
-          curl -fsSL https://ollama.ai/install.sh | sh
-        fi
-        ollama serve &
-        sleep 10
         if ! ollama list | grep -q "bge-m3"; then
           ollama pull bge-m3
         fi
@@ -85,9 +83,19 @@ jobs:
         which python3
         python3 --version
         python3 -m pip install --upgrade pip
+        
+        # Check if key packages are already installed (from cache)
+        if python3 -c "import whisper" 2>/dev/null; then
+          echo "✅ Whisper already installed (from cache)"
+        else
+          echo "📦 Installing packages from requirements.txt..."
+          python3 -m pip install -r Episode04/requirements.txt
+        fi
+        
+        # Install ruff separately (lightweight)
         python3 -m pip install ruff
-        python3 -m pip install -r Episode04/requirements.txt
-        echo "Verifying whisper installation..."
+        
+        echo "Verifying installations..."
         python3 -m pip list | grep -i whisper || echo "Whisper not found in pip list"
         python3 -c "import whisper; print('Whisper import successful')" || echo "Whisper import failed"
     
