@@ -47,16 +47,6 @@ jobs:
           brew install ffmpeg
         fi
     
-    - name: Cache Python packages
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cache/pip
-          /opt/hostedtoolcache/Python/3.12.11/x64/lib/python3.12/site-packages
-        key: python-packages-${{ runner.os }}-${{ hashFiles('Episode04/requirements.txt') }}-v1
-        restore-keys: |
-          python-packages-${{ runner.os }}-
-    
     - name: Install and start Ollama
       run: |
         curl -fsSL https://ollama.ai/install.sh | sh
@@ -76,6 +66,16 @@ jobs:
         if ! ollama list | grep -q "bge-m3"; then
           ollama pull bge-m3
         fi
+    
+    - name: Cache Python packages
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/pip
+          /opt/hostedtoolcache/Python/3.12.11/x64/lib/python3.12/site-packages
+        key: python-packages-${{ runner.os }}-${{ hashFiles('Episode04/requirements.txt') }}-v1
+        restore-keys: |
+          python-packages-${{ runner.os }}-
     
     - name: Install dependencies
       run: |
