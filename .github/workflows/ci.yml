@@ -53,15 +53,14 @@ jobs:
           libxcb1 \
           libx11-xcb1 \
           libxss1 \
-          libgconf-2-4 \
           libxtst6 \
           libxrandr2 \
-          libasound2 \
+          libasound2t64 \
           libpangocairo-1.0-0 \
           libatk1.0-0 \
           libcairo-gobject2 \
           libgtk-3-0 \
-          libgdk-pixbuf2.0-0
+          libgdk-pixbuf-2.0-0
 
     - name: Install ffmpeg via Homebrew with fallback
       run: |
