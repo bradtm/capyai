@@ -37,34 +37,27 @@ jobs:
           /home/linuxbrew/.linuxbrew/Cellar/ffmpeg
           /home/linuxbrew/.linuxbrew/lib
           /home/linuxbrew/.linuxbrew/var/homebrew/locks
-        key: homebrew-packages-${{ runner.os }}-ffmpeg-v2
+        key: homebrew-packages-${{ runner.os }}-ffmpeg-v3
         restore-keys: |
           homebrew-packages-${{ runner.os }}-
     
-    - name: Install ffmpeg
+    - name: Install ffmpeg via Homebrew
       run: |
         eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
         
-        # Install or link ffmpeg via Homebrew
-        if ! command -v ffmpeg &> /dev/null; then
-          if brew list ffmpeg &> /dev/null; then
-            echo "ffmpeg is installed but not linked. Linking..."
-            brew link ffmpeg
-          else
-            echo "Installing ffmpeg via Homebrew..."
-            brew install ffmpeg
-          fi
+        # Check if ffmpeg exists and link it properly
+        if brew list ffmpeg &> /dev/null; then
+          echo "ffmpeg found in Homebrew. Ensuring it's properly linked..."
+          brew unlink ffmpeg || true
+          brew link ffmpeg --force
+        else
+          echo "Installing ffmpeg via Homebrew..."
+          brew install ffmpeg
         fi
         
-        # If still not found, try apt-get as fallback
-        if ! command -v ffmpeg &> /dev/null; then
-          echo "Homebrew approach failed, installing ffmpeg via apt-get..."
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-        fi
-        
+        # Verify installation works
         echo "Checking ffmpeg installation:"
-        which ffmpeg || echo "ffmpeg not found in PATH after installation"
+        which ffmpeg || echo "ffmpeg not found in PATH"
         ffmpeg -version || echo "ffmpeg version check failed"
     
     - name: Install and start Ollama
@@ -132,22 +125,17 @@ jobs:
     
     - name: Run integration tests
       run: |
-        # Add ffmpeg to PATH but preserve GitHub Actions Python
+        # Set up environment with Homebrew for integration tests
         GITHUB_PYTHON=$(which python3)
         eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
         echo "Checking environment..."
         echo "GitHub Actions Python: $GITHUB_PYTHON"
-        echo "Current python3 (after PATH change): $(which python3)"
         echo "PATH: $PATH"
-        echo "HOMEBREW_PREFIX: $HOMEBREW_PREFIX"
-        echo "Contents of Homebrew bin directory:"
-        ls -la /home/linuxbrew/.linuxbrew/bin/ | head -10 || echo "Cannot list Homebrew bin directory"
-        echo "Searching for ffmpeg in filesystem:"
-        find /home/linuxbrew -name "ffmpeg*" 2>/dev/null | head -5 || echo "No ffmpeg found in Homebrew"
         $GITHUB_PYTHON --version
         $GITHUB_PYTHON -c "import whisper; print('whisper imported successfully')" || echo "whisper import failed"
-        which ffmpeg || echo "ffmpeg not found in PATH"
-        /home/linuxbrew/.linuxbrew/bin/ffmpeg -version || echo "Direct ffmpeg call failed"
+        echo "Checking ffmpeg availability:"
+        which ffmpeg
+        ffmpeg -version
         cd Episode04
         # Export environment variables for subprocess inheritance
         export PATH="$PATH"
