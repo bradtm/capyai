@@ -37,11 +37,33 @@ jobs:
           /home/linuxbrew/.linuxbrew/Cellar/ffmpeg
           /home/linuxbrew/.linuxbrew/lib
           /home/linuxbrew/.linuxbrew/var/homebrew/locks
-        key: homebrew-packages-${{ runner.os }}-ffmpeg-v3
+        key: homebrew-packages-${{ runner.os }}-ffmpeg-v4
         restore-keys: |
           homebrew-packages-${{ runner.os }}-
     
-    - name: Install ffmpeg via Homebrew
+    - name: Install system dependencies for ffmpeg
+      run: |
+        # Install X11 and other system dependencies that Homebrew ffmpeg needs
+        echo "Installing system dependencies for ffmpeg..."
+        sudo apt-get update
+        sudo apt-get install -y \
+          libxcb-shape0 \
+          libxcb-shm0 \
+          libxcb-xfixes0 \
+          libxcb1 \
+          libx11-xcb1 \
+          libxss1 \
+          libgconf-2-4 \
+          libxtst6 \
+          libxrandr2 \
+          libasound2 \
+          libpangocairo-1.0-0 \
+          libatk1.0-0 \
+          libcairo-gobject2 \
+          libgtk-3-0 \
+          libgdk-pixbuf2.0-0
+
+    - name: Install ffmpeg via Homebrew with fallback
       run: |
         eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
         
@@ -55,10 +77,19 @@ jobs:
           brew install ffmpeg
         fi
         
-        # Verify installation works
-        echo "Checking ffmpeg installation:"
-        which ffmpeg || echo "ffmpeg not found in PATH"
-        ffmpeg -version || echo "ffmpeg version check failed"
+        # Test if Homebrew ffmpeg works with system libraries
+        echo "Testing Homebrew ffmpeg..."
+        if ! /home/linuxbrew/.linuxbrew/bin/ffmpeg -version &> /dev/null; then
+          echo "Homebrew ffmpeg failed, falling back to apt-get..."
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          echo "Using system ffmpeg as fallback"
+        fi
+        
+        # Verify final installation works
+        echo "Final ffmpeg check:"
+        which ffmpeg
+        ffmpeg -version
     
     - name: Install and start Ollama
       run: |
