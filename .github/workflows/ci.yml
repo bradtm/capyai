@@ -119,9 +119,15 @@ jobs:
         echo "Checking environment..."
         echo "GitHub Actions Python: $GITHUB_PYTHON"
         echo "Current python3 (after PATH change): $(which python3)"
+        echo "PATH: $PATH"
         $GITHUB_PYTHON --version
         $GITHUB_PYTHON -c "import whisper; print('whisper imported successfully')" || echo "whisper import failed"
         which ffmpeg || echo "ffmpeg not found"
         ffmpeg -version || echo "ffmpeg version check failed"
         cd Episode04
+        # Export environment variables for subprocess inheritance
+        export PATH="$PATH"
+        export HOMEBREW_PREFIX="$HOMEBREW_PREFIX"
+        export HOMEBREW_CELLAR="$HOMEBREW_CELLAR" 
+        export HOMEBREW_REPOSITORY="$HOMEBREW_REPOSITORY"
         RAG_TEST_MAX_PDFS=5 $GITHUB_PYTHON integration_test_rag.py
