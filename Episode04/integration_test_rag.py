@@ -172,7 +172,8 @@ class TestRAGIntegration(unittest.TestCase):
             result = subprocess.run(
                 cmd,
                 timeout=actual_timeout,
-                cwd=self.project_root
+                cwd=self.project_root,
+                env=os.environ.copy()
             )
             
             print("=" * 60)
@@ -361,7 +362,8 @@ class TestRAGIntegration(unittest.TestCase):
             result = subprocess.run(
                 cmd,
                 timeout=actual_timeout,
-                cwd=self.project_root
+                cwd=self.project_root,
+                env=os.environ.copy()
             )
             
             print("=" * 60)
@@ -460,7 +462,7 @@ class TestRAGIntegration(unittest.TestCase):
         actual_timeout = min(5400, estimated_time)  # Cap at 1.5 hours
         print(f"Using incremental timeout: {actual_timeout/60:.1f} minutes")
         
-        result = subprocess.run(cmd, timeout=actual_timeout)
+        result = subprocess.run(cmd, timeout=actual_timeout, env=os.environ.copy())
         print("=" * 40)
         
         # Should still succeed
@@ -550,7 +552,8 @@ class TestRAGIntegration(unittest.TestCase):
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=60
+                timeout=60,
+                env=os.environ.copy()
             )
             
             if result.returncode == 0:
@@ -638,7 +641,8 @@ class TestRAGIntegration(unittest.TestCase):
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=60
+                timeout=60,
+                env=os.environ.copy()
             )
             
             if result.returncode == 0:
@@ -677,7 +681,8 @@ class TestRAGCommandLineInterface(unittest.TestCase):
             [sys.executable, rag_script, "--help"],
             capture_output=True,
             text=True,
-            timeout=30
+            timeout=30,
+            env=os.environ.copy()
         )
         
         self.assertEqual(result.returncode, 0)
@@ -692,7 +697,8 @@ class TestRAGCommandLineInterface(unittest.TestCase):
             [sys.executable, rag_script, "--invalid-arg"],
             capture_output=True,
             text=True,
-            timeout=30
+            timeout=30,
+            env=os.environ.copy()
         )
         
         # Should exit with error code
