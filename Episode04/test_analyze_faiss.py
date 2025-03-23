@@ -213,7 +213,7 @@ class TestAnalyzeFaiss(unittest.TestCase):
     @patch('analyze_faiss.OpenAIEmbeddings')
     def test_analyze_faiss_index_no_truncation(self, mock_embeddings, mock_faiss_load):
         """Test analyze_faiss_index with no content truncation"""
-        long_content = "This is a long document content that should not be truncated. " * 3
+        long_content = ("This is a long document content that should not be truncated. " * 3).strip()
         mock_doc = MagicMock()
         mock_doc.metadata = {'source': 'test.pdf'}
         mock_doc.page_content = long_content
