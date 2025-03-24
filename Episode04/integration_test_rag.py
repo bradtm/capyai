@@ -50,7 +50,7 @@ class TestRAGIntegration(unittest.TestCase):
         os.makedirs(cls.test_transcript_dir, exist_ok=True)
         
         # Expected test audio directory
-        cls.test_audio_dir = os.path.join(cls.project_root, "test_audio")
+        cls.test_audio_dir = os.path.join(cls.project_root, "sample_media")
         
         # Verify test audio files exist
         if not os.path.exists(cls.test_audio_dir):
@@ -65,7 +65,7 @@ class TestRAGIntegration(unittest.TestCase):
             raise unittest.SkipTest(f"No audio/video files found in {cls.test_audio_dir}")
         
         # Expected test PDF directory
-        cls.test_pdf_dir = os.path.join(cls.project_root, "test_pdfs")
+        cls.test_pdf_dir = os.path.join(cls.project_root, "sample_pdfs")
         
         # Verify test PDF files exist
         if not os.path.exists(cls.test_pdf_dir):

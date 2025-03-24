@@ -118,8 +118,8 @@ def main():
     print("arXiv AI Papers Downloader")
     print("=" * 50)
     
-    # Create test_pdfs directory
-    pdf_dir = Path("test_pdfs")
+    # Create sample_pdfs directory
+    pdf_dir = Path("sample_pdfs")
     pdf_dir.mkdir(exist_ok=True)
     
     print(f"Download directory: {pdf_dir.absolute()}")

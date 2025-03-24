@@ -162,7 +162,7 @@ def main():
     print("PDF Validation and Repair Tool")
     print("=" * 40)
     
-    pdf_dir = Path("test_pdfs")
+    pdf_dir = Path("sample_pdfs")
     
     if not pdf_dir.exists():
         print(f"PDF directory not found: {pdf_dir}")
