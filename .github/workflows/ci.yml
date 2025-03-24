@@ -80,6 +80,8 @@ jobs:
         echo "Testing Homebrew ffmpeg..."
         if ! /home/linuxbrew/.linuxbrew/bin/ffmpeg -version &> /dev/null; then
           echo "Homebrew ffmpeg failed, falling back to apt-get..."
+          # Unlink problematic Homebrew ffmpeg to avoid PATH conflicts
+          brew unlink ffmpeg || true
           sudo apt-get update
           sudo apt-get install -y ffmpeg
           echo "Using system ffmpeg as fallback"
