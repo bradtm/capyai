@@ -24,7 +24,6 @@ from io import StringIO
 sys.path.insert(0, os.path.dirname(__file__))
 
 try:
-    import evaluate_retrieval
     from evaluate_retrieval import (
         VectorStoreLoader, 
         OllamaEmbeddings,

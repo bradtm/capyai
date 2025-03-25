@@ -17,8 +17,7 @@ import shutil
 import os
 import sys
 import json
-from unittest.mock import patch, MagicMock, mock_open, call
-from io import StringIO
+from unittest.mock import patch, MagicMock, mock_open
 
 # Add current directory to path for importing the module
 sys.path.insert(0, os.path.dirname(__file__))
@@ -297,7 +296,7 @@ class TestUtilityFunctions(unittest.TestCase):
     
     def test_chunk_text_filtering(self):
         """Test chunk text filtering functionality"""
-        generator = QuestionGenerator(provider="ollama")
+        QuestionGenerator(provider="ollama")
         
         # Test with short chunk (should be filtered)
         short_chunk = "Very short text."
@@ -314,11 +313,9 @@ class TestUtilityFunctions(unittest.TestCase):
         mock_llm.generate.return_value = "What is machine learning?"
         mock_provider.return_value = mock_llm
         
-        generator = QuestionGenerator(provider="ollama")
+        QuestionGenerator(provider="ollama")
         
         # Mock a chunk for testing
-        chunk_text = "Machine learning is a subset of artificial intelligence that enables computers to learn from data."
-        
         # This would be called internally during question generation
         # We can't easily test the private methods, but we can verify the LLM interaction
         result = mock_llm.generate("test prompt")
@@ -420,7 +417,7 @@ class TestChromaSupport(unittest.TestCase):
     @patch('generate_test_questions.CHROMA_AVAILABLE', False)
     def test_chroma_not_available(self):
         """Test behavior when Chroma is not available"""
-        generator = QuestionGenerator(provider="ollama")
+        QuestionGenerator(provider="ollama")
         
         # Should handle missing Chroma gracefully
         # The actual implementation would check CHROMA_AVAILABLE before using Chroma
