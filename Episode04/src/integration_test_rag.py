@@ -113,7 +113,7 @@ class TestRAGIntegration(unittest.TestCase):
     def test_rag_chroma_pipeline_full_integration(self):
         """Test the full RAG pipeline with Chroma vector store for both audio and PDF files."""
         # Construct the command
-        rag_script = os.path.join(self.project_root, "rag.py")
+        rag_script = os.path.join(self.project_root, "src", "rag.py")
         
         cmd = [
             sys.executable, rag_script,
@@ -302,7 +302,7 @@ class TestRAGIntegration(unittest.TestCase):
     def test_rag_faiss_pipeline_full_integration(self):
         """Test the full RAG pipeline with FAISS vector store for both audio and PDF files."""
         # Construct the command for FAISS using local bge-m3 embeddings
-        rag_script = os.path.join(self.project_root, "rag.py")
+        rag_script = os.path.join(self.project_root, "src", "rag.py")
         
         cmd = [
             sys.executable, rag_script,
@@ -432,7 +432,7 @@ class TestRAGIntegration(unittest.TestCase):
         time.sleep(1)
         
         # Run the command again with both audio and PDF files
-        rag_script = os.path.join(self.project_root, "rag.py")
+        rag_script = os.path.join(self.project_root, "src", "rag.py")
         cmd = [
             sys.executable, rag_script,
             "--store", "chroma",
@@ -534,7 +534,7 @@ class TestRAGIntegration(unittest.TestCase):
     def _run_analyze_chroma_script(self):
         """Run the analyze_chroma.py script to verify collection"""
         try:
-            analyze_script = os.path.join(self.project_root, '..', 'Episode03', 'analyze_chroma.py')
+            analyze_script = os.path.join(self.project_root, 'src', 'analyze_chroma.py')
             if not os.path.exists(analyze_script):
                 print("⚠️  analyze_chroma.py script not found, skipping analysis")
                 return
@@ -628,7 +628,7 @@ class TestRAGIntegration(unittest.TestCase):
             print("\n📊 Skipping analyze_faiss.py script (requires OpenAI embeddings, but test uses bge-m3)")
             return
             
-            analyze_script = os.path.join(self.project_root, "analyze_faiss.py")
+            analyze_script = os.path.join(self.project_root, "src", "analyze_faiss.py")
             if not os.path.exists(analyze_script):
                 print("⚠️  analyze_faiss.py script not found, skipping analysis")
                 return
@@ -680,7 +680,7 @@ class TestRAGCommandLineInterface(unittest.TestCase):
     
     def test_rag_help_command(self):
         """Test that the RAG script shows help when requested."""
-        rag_script = os.path.join(self.project_root, "rag.py")
+        rag_script = os.path.join(self.project_root, "src", "rag.py")
         
         result = subprocess.run(
             [sys.executable, rag_script, "--help"],
@@ -696,7 +696,7 @@ class TestRAGCommandLineInterface(unittest.TestCase):
     
     def test_rag_invalid_arguments(self):
         """Test that RAG script handles invalid arguments gracefully."""
-        rag_script = os.path.join(self.project_root, "rag.py")
+        rag_script = os.path.join(self.project_root, "src", "rag.py")
         
         result = subprocess.run(
             [sys.executable, rag_script, "--invalid-arg"],
