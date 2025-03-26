@@ -494,7 +494,7 @@ class TestRAGIntegration(unittest.TestCase):
     def _validate_chroma_collection(self, expected_total_files):
         """Validate the Chroma collection has expected properties"""
         if not ANALYZE_CHROMA_AVAILABLE:
-            error_msg = f"analyze_chroma dependencies not available"
+            error_msg = "analyze_chroma dependencies not available"
             if 'ANALYZE_CHROMA_ERROR' in globals():
                 error_msg += f": {ANALYZE_CHROMA_ERROR}"
             print(f"⚠️  Chroma validation skipped: {error_msg}")
@@ -588,7 +588,7 @@ class TestRAGIntegration(unittest.TestCase):
     def _validate_faiss_index(self, expected_total_files):
         """Validate the FAISS index has expected properties"""
         if not ANALYZE_FAISS_AVAILABLE:
-            error_msg = f"analyze_faiss dependencies not available"
+            error_msg = "analyze_faiss dependencies not available"
             if 'ANALYZE_FAISS_ERROR' in globals():
                 error_msg += f": {ANALYZE_FAISS_ERROR}"
             print(f"⚠️  FAISS validation skipped: {error_msg}")
