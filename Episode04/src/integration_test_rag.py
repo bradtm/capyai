@@ -35,7 +35,7 @@ class TestRAGIntegration(unittest.TestCase):
     def setUpClass(cls):
         """Set up class-level test fixtures."""
         cls.original_cwd = os.getcwd()
-        cls.project_root = os.path.dirname(__file__)
+        cls.project_root = os.path.dirname(os.path.dirname(__file__))
         
         # Change to project root for consistent execution
         os.chdir(cls.project_root)
@@ -675,7 +675,7 @@ class TestRAGCommandLineInterface(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        self.project_root = os.path.dirname(__file__)
+        self.project_root = os.path.dirname(os.path.dirname(__file__))
         os.chdir(self.project_root)
     
     def test_rag_help_command(self):

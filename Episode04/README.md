@@ -269,12 +269,12 @@ The JSON output format makes it easy to integrate with web applications, APIs, a
 ## Development
 
 ### Modular Architecture
-- `ask_core/` - Core RAG system components
-- `ask_core/qa_system.py` - Main question-answering logic
-- `ask_core/embeddings.py` - Embedding model management
-- `ask_core/vector_stores.py` - Vector store abstractions  
-- `ask_core/rerankers.py` - Reranking implementations
-- `ask_core/llm_managers.py` - LLM provider integrations
+- `src/ask_core/` - Core RAG system components
+- `src/ask_core/qa_system.py` - Main question-answering logic
+- `src/ask_core/embeddings.py` - Embedding model management
+- `src/ask_core/vector_stores.py` - Vector store abstractions  
+- `src/ask_core/rerankers.py` - Reranking implementations
+- `src/ask_core/llm_managers.py` - LLM provider integrations
 
 ### Extending the System
 The modular design makes it easy to:
