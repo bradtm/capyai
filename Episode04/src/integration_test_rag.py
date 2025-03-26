@@ -13,18 +13,24 @@ import glob
 # Add the project root to the path so we can import rag
 sys.path.insert(0, os.path.dirname(__file__))
 
+# Add tests directory to path for validation functions
+tests_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'tests')
+sys.path.insert(0, tests_dir)
+
 # Try to import validation functions
 try:
     from test_analyze_chroma import TestAnalyzeChromaIntegration
     ANALYZE_CHROMA_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     ANALYZE_CHROMA_AVAILABLE = False
+    ANALYZE_CHROMA_ERROR = str(e)
 
 try:
     from test_analyze_faiss import TestAnalyzeFaissIntegration
     ANALYZE_FAISS_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     ANALYZE_FAISS_AVAILABLE = False
+    ANALYZE_FAISS_ERROR = str(e)
 
 
 
@@ -488,7 +494,10 @@ class TestRAGIntegration(unittest.TestCase):
     def _validate_chroma_collection(self, expected_total_files):
         """Validate the Chroma collection has expected properties"""
         if not ANALYZE_CHROMA_AVAILABLE:
-            print("⚠️  Chroma validation skipped: analyze_chroma dependencies not available")
+            error_msg = f"analyze_chroma dependencies not available"
+            if 'ANALYZE_CHROMA_ERROR' in globals():
+                error_msg += f": {ANALYZE_CHROMA_ERROR}"
+            print(f"⚠️  Chroma validation skipped: {error_msg}")
             return
         
         print("\n🔍 Validating Chroma collection...")
@@ -579,7 +588,10 @@ class TestRAGIntegration(unittest.TestCase):
     def _validate_faiss_index(self, expected_total_files):
         """Validate the FAISS index has expected properties"""
         if not ANALYZE_FAISS_AVAILABLE:
-            print("⚠️  FAISS validation skipped: analyze_faiss dependencies not available")
+            error_msg = f"analyze_faiss dependencies not available"
+            if 'ANALYZE_FAISS_ERROR' in globals():
+                error_msg += f": {ANALYZE_FAISS_ERROR}"
+            print(f"⚠️  FAISS validation skipped: {error_msg}")
             return
         
         print("\n🔍 Validating FAISS index...")
