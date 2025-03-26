@@ -8,7 +8,7 @@ from langchain.prompts import ChatPromptTemplate
 
 # Optional imports for external LLM providers
 try:
-    from llm_core import create_llm
+    from ..llm_core import create_llm
     LLM_CORE_AVAILABLE = True
 except ImportError:
     LLM_CORE_AVAILABLE = False

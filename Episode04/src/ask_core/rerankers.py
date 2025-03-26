@@ -5,7 +5,7 @@ from langchain_core.documents import Document
 
 # Optional reranking imports
 try:
-    from rerank_core import create_reranker, get_available_models
+    from ..rerank_core import create_reranker, get_available_models
     RERANKING_AVAILABLE = True
 except ImportError:
     RERANKING_AVAILABLE = False

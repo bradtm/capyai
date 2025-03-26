@@ -15,13 +15,22 @@ from dotenv import load_dotenv
 # Fix HuggingFace tokenizers warning when using reranking
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-from ask_core.qa_system import QASystem
-from ask_core.utils import (
-    display_results, 
-    validate_environment_variables, 
-    get_store_config
-)
-from ask_core.rerankers import check_reranking_dependencies
+try:
+    from .ask_core.qa_system import QASystem
+    from .ask_core.utils import (
+        display_results, 
+        validate_environment_variables, 
+        get_store_config
+    )
+    from .ask_core.rerankers import check_reranking_dependencies
+except ImportError:
+    from ask_core.qa_system import QASystem
+    from ask_core.utils import (
+        display_results, 
+        validate_environment_variables, 
+        get_store_config
+    )
+    from ask_core.rerankers import check_reranking_dependencies
 
 # Optional rich formatting imports
 try:
@@ -144,7 +153,10 @@ def _display_results_rich(console, query, docs_with_scores, answer, system_info,
     # Filter references to only contributing ones unless --show-all-references is used
     display_docs = docs_with_scores
     if not show_all_references and docs_with_scores:
-        from ask_core.reference_filter import ReferenceFilter
+        try:
+            from .ask_core.reference_filter import ReferenceFilter
+        except ImportError:
+            from ask_core.reference_filter import ReferenceFilter
         filter = ReferenceFilter()
         display_docs = filter.filter_contributing_references(answer, docs_with_scores, verbose=verbose)
     
@@ -223,7 +235,10 @@ def _display_results_json(query, docs_with_scores, answer, system_info,
     # Filter references to only contributing ones unless --show-all-references is used
     display_docs = docs_with_scores
     if not show_all_references and docs_with_scores:
-        from ask_core.reference_filter import ReferenceFilter
+        try:
+            from .ask_core.reference_filter import ReferenceFilter
+        except ImportError:
+            from ask_core.reference_filter import ReferenceFilter
         filter = ReferenceFilter()
         display_docs = filter.filter_contributing_references(answer, docs_with_scores, verbose=verbose)
     
@@ -640,7 +655,10 @@ def _run_multi_collection_query(args, query):
     
     # Generate final answer using the first QA system's LLM
     first_qa_system = collection_results[0]['qa_system']
-    from ask_core.utils import format_documents
+    try:
+        from .ask_core.utils import format_documents
+    except ImportError:
+        from ask_core.utils import format_documents
     
     docs = [doc for doc, score in final_docs_with_scores]
     context = format_documents(docs)
