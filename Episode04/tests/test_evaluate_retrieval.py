@@ -20,8 +20,8 @@ import json
 from unittest.mock import patch, MagicMock, mock_open
 from io import StringIO
 
-# Add current directory to path for importing the module
-sys.path.insert(0, os.path.dirname(__file__))
+# Add src directory to path for importing the modules
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 try:
     from evaluate_retrieval import (

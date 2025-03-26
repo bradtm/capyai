@@ -11,8 +11,8 @@ import json
 from unittest.mock import patch, MagicMock
 from io import StringIO
 
-# Add the project root to the path so we can import analyze_faiss
-sys.path.insert(0, os.path.dirname(__file__))
+# Add src directory to the path so we can import analyze_faiss
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 try:
     from analyze_faiss import analyze_faiss_index, test_search

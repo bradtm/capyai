@@ -11,8 +11,8 @@ import shutil
 import requests
 from unittest.mock import patch, MagicMock
 
-# Add the project root to the path so we can import rag
-sys.path.insert(0, os.path.dirname(__file__))
+# Add src directory to the path so we can import rag
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 import rag
 
