@@ -9,10 +9,75 @@ on:
     paths: [ 'Episode04/**' ]
   workflow_dispatch:
 
-
 jobs:
-  test:
+  # Fast validation and linting job - runs first for quick feedback
+  lint:
+    name: "Code Quality & Linting"
     runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: pip-lint-${{ runner.os }}-${{ hashFiles('Episode04/requirements.txt') }}
+        restore-keys: |
+          pip-lint-${{ runner.os }}-
+    
+    - name: Install ruff
+      run: python3 -m pip install ruff
+    
+    - name: Run Ruff linter
+      run: ruff check Episode04/
+
+  # Unit tests - lightweight and fast
+  unit-tests:
+    name: "Unit Tests"
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        lfs: true
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+    
+    - name: Cache Python packages
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/pip
+          /opt/hostedtoolcache/Python/3.12.11/x64/lib/python3.12/site-packages
+        key: python-unit-${{ runner.os }}-${{ hashFiles('Episode04/requirements.txt') }}-v2
+        restore-keys: |
+          python-unit-${{ runner.os }}-
+    
+    - name: Install dependencies
+      run: |
+        python3 -m pip install --upgrade pip
+        # Install only essential dependencies for unit tests
+        python3 -m pip install -r Episode04/requirements.txt
+    
+    - name: Run unit tests
+      run: |
+        cd Episode04
+        python -m unittest discover -s tests -p "test_*.py" -v
+
+  # Heavy integration tests with full environment setup
+  integration-tests:
+    name: "Integration Tests"
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests]  # Only run if lint and unit tests pass
     
     steps:
     - uses: actions/checkout@v4
@@ -112,7 +177,7 @@ jobs:
           ollama pull bge-m3
         fi
     
-    - name: Cache Python packages
+    - name: Cache Python packages for integration
       uses: actions/cache@v3
       with:
         path: |
@@ -121,9 +186,9 @@ jobs:
           /opt/hostedtoolcache/Python/3.12.11/x64/lib/python3.12/site-packages/torch*
           /opt/hostedtoolcache/Python/3.12.11/x64/lib/python3.12/site-packages/langchain*
           /opt/hostedtoolcache/Python/3.12.11/x64/lib/python3.12/site-packages/chromadb*
-        key: python-packages-${{ runner.os }}-${{ hashFiles('Episode04/requirements.txt') }}-v2
+        key: python-integration-${{ runner.os }}-${{ hashFiles('Episode04/requirements.txt') }}-v2
         restore-keys: |
-          python-packages-${{ runner.os }}-
+          python-integration-${{ runner.os }}-
     
     - name: Install dependencies
       run: |
@@ -140,20 +205,9 @@ jobs:
           python3 -m pip install -r Episode04/requirements.txt
         fi
         
-        # Install ruff separately (lightweight)
-        python3 -m pip install ruff
-        
         echo "Verifying installations..."
         python3 -m pip list | grep -i whisper || echo "Whisper not found in pip list"
         python3 -c "import whisper; print('Whisper import successful')" || echo "Whisper import failed"
-    
-    - name: Run Ruff linter
-      run: ruff check Episode04/
-    
-    - name: Run unit tests
-      run: |
-        cd Episode04
-        python -m unittest discover -s tests -p "test_*.py" -v
     
     - name: Run integration tests
       run: |
@@ -175,3 +229,27 @@ jobs:
         export HOMEBREW_CELLAR="$HOMEBREW_CELLAR" 
         export HOMEBREW_REPOSITORY="$HOMEBREW_REPOSITORY"
         RAG_TEST_MAX_PDFS=5 $GITHUB_PYTHON src/integration_test_rag.py
+
+  # Summary job that depends on all others - useful for branch protection rules
+  ci-success:
+    name: "CI Success"
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests, integration-tests]
+    if: always()
+    
+    steps:
+    - name: Check all jobs succeeded
+      run: |
+        if [[ "${{ needs.lint.result }}" != "success" ]]; then
+          echo "❌ Linting failed"
+          exit 1
+        fi
+        if [[ "${{ needs.unit-tests.result }}" != "success" ]]; then
+          echo "❌ Unit tests failed"
+          exit 1
+        fi
+        if [[ "${{ needs.integration-tests.result }}" != "success" ]]; then
+          echo "❌ Integration tests failed"
+          exit 1
+        fi
+        echo "✅ All CI jobs passed!"
