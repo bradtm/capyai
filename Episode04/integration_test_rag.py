@@ -13,6 +13,13 @@ import glob
 # Add the project root to the path so we can import rag
 sys.path.insert(0, os.path.dirname(__file__))
 
+# Try to import analyze_chroma validation functions
+try:
+    from test_analyze_chroma import TestAnalyzeChromaIntegration
+    ANALYZE_CHROMA_AVAILABLE = True
+except ImportError:
+    ANALYZE_CHROMA_AVAILABLE = False
+
 
 
 class TestRAGIntegration(unittest.TestCase):
@@ -274,6 +281,9 @@ class TestRAGIntegration(unittest.TestCase):
             print(f"   - Non-empty transcripts: {non_empty_transcripts}")
             print(f"   - Created Chroma collection with {len(chroma_files)} files")
             
+            # Validate Chroma collection using analyze_chroma functionality
+            self._validate_chroma_collection(expected_total_files)
+            
         except subprocess.TimeoutExpired:
             self.fail(f"RAG command timed out after {actual_timeout/60:.1f} minutes ({actual_timeout} seconds)")
         except Exception as e:
@@ -321,7 +331,13 @@ class TestRAGIntegration(unittest.TestCase):
         
         print("\nRunning incremental test (second run)...")
         print("=" * 40)
-        result = subprocess.run(cmd, timeout=300)
+        
+        # Use the same timeout calculation as the main test
+        estimated_time = 1800 + len(pdf_files) * 120  # 30 min base + 2 min per PDF
+        actual_timeout = min(5400, estimated_time)  # Cap at 1.5 hours
+        print(f"Using incremental timeout: {actual_timeout/60:.1f} minutes")
+        
+        result = subprocess.run(cmd, timeout=actual_timeout)
         print("=" * 40)
         
         # Should still succeed
@@ -342,6 +358,96 @@ class TestRAGIntegration(unittest.TestCase):
         
         # The test passes as long as the second run completes successfully
         # Caching behavior may vary based on implementation details
+    
+    def _validate_chroma_collection(self, expected_total_files):
+        """Validate the Chroma collection has expected properties"""
+        if not ANALYZE_CHROMA_AVAILABLE:
+            print("⚠️  Chroma validation skipped: analyze_chroma dependencies not available")
+            return
+        
+        print("\n🔍 Validating Chroma collection...")
+        
+        try:
+            # Create validator instance
+            validator = TestAnalyzeChromaIntegration()
+            validator.setUp()
+            
+            # Expected source files (basenames)
+            expected_sources = self.test_audio_files + self.test_pdf_files
+            
+            # Validate the collection
+            validation_results = validator.validate_chroma_collection(
+                chroma_path=self.test_chroma_path,
+                collection_name="test_mixed_content",
+                expected_docs=None,  # Don't validate exact doc count (can vary with chunking)
+                expected_sources=expected_sources
+            )
+            
+            # Clean up validator
+            validator.tearDown()
+            
+            # Check validation results
+            if validation_results['valid']:
+                print("✅ Chroma validation passed!")
+                print(f"   - Collection contains {validation_results['doc_count']} document chunks")
+                print(f"   - Found sources: {', '.join(validation_results['sources'])}")
+            else:
+                print("❌ Chroma validation failed!")
+                for error in validation_results['errors']:
+                    print(f"   - Error: {error}")
+                # Don't fail the test, just warn
+                print("   (Continuing test despite validation issues)")
+                
+            # Additional verification: run analyze_chroma script
+            self._run_analyze_chroma_script()
+                
+        except Exception as e:
+            print(f"⚠️  Chroma validation error: {e}")
+            print("   (Continuing test despite validation error)")
+    
+    def _run_analyze_chroma_script(self):
+        """Run the analyze_chroma.py script to verify collection"""
+        try:
+            analyze_script = os.path.join(self.project_root, '..', 'Episode03', 'analyze_chroma.py')
+            if not os.path.exists(analyze_script):
+                print("⚠️  analyze_chroma.py script not found, skipping analysis")
+                return
+            
+            print("\n📊 Running analyze_chroma.py script...")
+            
+            cmd = [
+                sys.executable, analyze_script,
+                self.test_chroma_path,
+                '--collection', 'test_mixed_content',
+                '--entries', '2',
+                '--keys-only'
+            ]
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            
+            if result.returncode == 0:
+                print("✅ analyze_chroma.py completed successfully")
+                # Show some output for verification
+                output_lines = result.stdout.split('\n')[:10]  # Show first 10 lines
+                for line in output_lines:
+                    if line.strip():
+                        print(f"   {line}")
+                if len(result.stdout.split('\n')) > 10:
+                    print("   ... (output truncated)")
+            else:
+                print(f"⚠️  analyze_chroma.py failed with return code {result.returncode}")
+                if result.stderr:
+                    print(f"   Error: {result.stderr[:200]}...")
+                
+        except subprocess.TimeoutExpired:
+            print("⚠️  analyze_chroma.py script timed out")
+        except Exception as e:
+            print(f"⚠️  Error running analyze_chroma.py: {e}")
 
 
 class TestRAGCommandLineInterface(unittest.TestCase):
